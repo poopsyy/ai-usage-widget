@@ -134,7 +134,7 @@ public struct ClaudeProvider: UsageProvider {
     public func fetch() async throws -> UsageSnapshot {
         let url = directory.appendingPathComponent("claude.json")
         guard FileManager.default.fileExists(atPath: url.path) else {
-            throw UsageError.setup("Connect Claude Code in Settings, then send a message in Claude Code.")
+            throw UsageError.setup("No legacy Claude Code snapshot is available. Automatic monitoring uses the installed Claude Code executable.")
         }
         let snapshot = try UsageFiles.read(UsageSnapshot.self, from: url)
         guard snapshot.provider == .claude, !snapshot.windows.isEmpty,

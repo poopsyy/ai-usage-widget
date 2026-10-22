@@ -43,3 +43,7 @@ claude-integration.json
 claude.json
 codex.json
 alerts.json
+
+# Account-scoped runtime data
+quota-*.json
+alerts-*.json

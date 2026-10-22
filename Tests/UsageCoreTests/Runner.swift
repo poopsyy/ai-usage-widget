@@ -5,7 +5,18 @@ import Foundation
 struct CheckRunner {
     static func main() async {
         let usage = UsageTests()
+        let agents = AgentTests()
         let checks: [(String, () async throws -> Void)] = [
+            ("Terminal replay and Claude quota parsing", { try agents.testTerminalAndQuotaParsing() }),
+            ("Account scopes and login URL restrictions", { agents.testScopesAndLoginURLs() }),
+            ("Executable discovery", { try agents.testDiscovery() }),
+            ("Experimental connection cleanup is scoped and retryable", { try agents.testExperimentalCleanupIsScopedAndRetryable() }),
+            ("Claude probe without a chat", { try await agents.testClaudeProbeWithoutChat() }),
+            ("Claude failures, deadline, and cancellation", { try await agents.testClaudeFailuresAndCancellation() }),
+            ("Claude cursor queries, scoped trust, and crashes", { try await agents.testClaudeTerminalQueriesAndTrust() }),
+            ("Codex account reads and browser sign-in", { try await agents.testCodexAccountAndBrowserLogin() }),
+            ("Monitor serialization, pause, and late results", { try await agents.testMonitorSerializationPauseAndLateResults() }),
+            ("Verified cache restoration and rate-limit cooldown", { try await agents.testVerifiedCacheAndRateLimitCooldown() }),
             ("Claude subscription windows and privacy", { try usage.testClaudeSubscriptionWindows() }),
             ("Missing and invalid Claude fields", { try usage.testMissingAndInvalidClaudeFields() }),
             ("Unknown reset", { try usage.testPartialWindowHasUnknownReset() }),

@@ -31,7 +31,7 @@ For layout work, use the sample-data preview:
 open -n "dist/AI Usage.app" --args --preview
 ```
 
-Preview mode does not poll providers automatically. Its Settings controls are real controls: do not connect an integration or change login/notification settings during a purely visual check.
+Preview mode uses labeled sample data, skips account-data reads and provider polling, and disables Settings mutations. Automated integration tests use fake executables; do not invoke a real agent or send a model prompt to run checks. Live-account validation requires a separately authorized task.
 
 ## Verify
 

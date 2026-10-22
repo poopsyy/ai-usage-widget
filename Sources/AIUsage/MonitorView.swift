@@ -36,13 +36,13 @@ struct MonitorView: View {
 
             VStack(spacing: 12) {
                 ForEach(ProviderID.allCases, id: \.self) { provider in
-                    ProviderCard(provider: provider, state: store.providers[provider] ?? ProviderState(), status: store.status(provider), now: store.now)
+                    ProviderCard(provider: provider, state: store.providers[provider] ?? ProviderState(), status: store.status(provider), now: store.now, signIn: { store.signIn(provider) }, resume: { store.setPaused(provider, false) }, cancel: { store.cancelSignIn(provider) })
                 }
             }.padding(.horizontal, 16)
 
             HStack(spacing: 5) {
                 Image(systemName: "clock").font(.system(size: 10))
-                Text("Codex refreshes every 5 min · Claude via Code")
+                Text("Checks every 5 min · No open session needed")
                     .font(.system(size: 10))
                 Spacer(minLength: 0)
             }
@@ -70,6 +70,9 @@ private struct ProviderCard: View {
     let state: ProviderState
     let status: String
     let now: Date
+    let signIn: () -> Void
+    let resume: () -> Void
+    let cancel: () -> Void
     var accent: Color { Palette.accent(provider) }
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -93,7 +96,7 @@ private struct ProviderCard: View {
                 if let error = state.error {
                     Text(error).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else if snapshot.isStale(at: now), provider == .claude {
-                    Text("Use Claude Code to update this reading.").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text("Refresh to request a new reading from Claude Code.").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 HStack(spacing: 4) {
                     Circle().fill(snapshot.isStale(at: now) || !state.connected ? .orange : accent).frame(width: 4, height: 4)
@@ -103,11 +106,17 @@ private struct ProviderCard: View {
                 }.foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(state.error ?? (provider == .claude ? "Connect Claude Code in Settings to see your allowance." : "Connecting to your Codex account…"))
+                    Text(state.error ?? (state.phase == .paused ? "Monitoring is paused. Your agent remains signed in." : "Checking the installed agent and its existing sign-in…"))
                         .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     usageLink
                 }.padding(.bottom, 3)
             }
+            if state.phase == .signInRequired { Button("Sign in using default browser", action: signIn).font(.system(size: 11)) }
+            if state.phase == .signingIn {
+                Text("Complete sign-in in your default browser.").font(.system(size: 11)).foregroundStyle(.secondary)
+                Button("Cancel sign-in", action: cancel).font(.system(size: 11))
+            }
+            if state.phase == .paused { Button("Resume monitoring", action: resume).font(.system(size: 11)) }
         }
         .padding(16)
         .background(.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))

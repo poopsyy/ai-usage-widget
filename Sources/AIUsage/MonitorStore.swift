@@ -4,156 +4,168 @@ import ServiceManagement
 import UserNotifications
 import UsageCore
 
-struct ProviderState {
-    var snapshot: UsageSnapshot?
-    var error: String?
-    var refreshing = false
-    var connected = false
+extension Notification.Name { static let agentMonitoringWillStop = Notification.Name("AIUsageAgentMonitoringWillStop") }
+typealias ProviderState = AgentState
+
+private struct ScopedSnapshot: Codable {
+    var scope: String
+    var snapshot: UsageSnapshot
 }
 
 @MainActor
 final class MonitorStore: ObservableObject {
     @Published var providers: [ProviderID: ProviderState] = [:]
     @Published var now = Date()
-    @Published var alertsEnabled = UserDefaults.standard.bool(forKey: "alertsEnabled")
+    @Published var alertsEnabled = false
     @Published var notificationStatus = ""
     @Published var integrationInstalled = false
     @Published var settingsMessage: String?
     @Published var settingsError = false
-    @Published var loginEnabled = SMAppService.mainApp.status == .enabled
-    @Published var codexPath = UserDefaults.standard.string(forKey: "codexPath") ?? ""
+    @Published var loginEnabled = false
+    @Published var codexPath = ""
+    @Published var claudePath = ""
     let preview: Bool
     private var timer: Timer?
-    private var observers: [NSObjectProtocol] = []
-    private var nextCodexRefresh = Date.distantPast
-    private var failureCount = 0
-    private var lastClaudeModification: Date?
-    private var ledger: AlertLedger
+    private var wakeObserver: NSObjectProtocol?
+    private var stopObserver: NSObjectProtocol?
+    private var monitors: [ProviderID: AgentMonitor] = [:]
+    private var ledgers: [String: AlertLedger] = [:]
     private var evaluatingAlerts = false
     private let notifications = NotificationDelegate()
     private let directory: URL
 
     init(preview: Bool = false, directory: URL = UsageFiles.directory) {
-        self.preview = preview
-        self.directory = directory
-        ledger = (try? UsageFiles.read(AlertLedger.self, from: directory.appendingPathComponent("alerts.json"))) ?? AlertLedger()
-        for provider in ProviderID.allCases {
-            providers[provider] = ProviderState(snapshot: try? UsageFiles.read(UsageSnapshot.self, from: directory.appendingPathComponent("\(provider.rawValue).json")))
-        }
+        self.preview = preview; self.directory = directory
         if preview {
             providers[.claude] = ProviderState(snapshot: UsageSnapshot(provider: .claude, observedAt: now.addingTimeInterval(-32), windows: [
-                UsageWindow(id: "five_hour", title: "5 hours", usedPercent: 58, resetsAt: now.addingTimeInterval(8040)),
+                UsageWindow(id: "five_hour", title: "Session", usedPercent: 58, resetsAt: now.addingTimeInterval(8040)),
                 UsageWindow(id: "seven_day", title: "Weekly", usedPercent: 31, resetsAt: now.addingTimeInterval(268800))
-            ]), connected: true)
+            ]), phase: .connected)
             providers[.codex] = ProviderState(snapshot: UsageSnapshot(provider: .codex, observedAt: now.addingTimeInterval(-8), windows: [
                 UsageWindow(id: "codex.primary", title: "5 hours", usedPercent: 24, resetsAt: now.addingTimeInterval(12240)),
                 UsageWindow(id: "codex.secondary", title: "Weekly", usedPercent: 46, resetsAt: now.addingTimeInterval(432000))
-            ], plan: "plus"), connected: true)
+            ], plan: "plus"), phase: .connected)
             return
         }
+        let preferences = UserDefaults.standard
+        alertsEnabled = preferences.bool(forKey: "alertsEnabled")
+        loginEnabled = SMAppService.mainApp.status == .enabled
+        codexPath = preferences.string(forKey: "codexPath") ?? ""
+        claudePath = preferences.string(forKey: "claudePath") ?? ""
         UNUserNotificationCenter.current().delegate = notifications
         integrationInstalled = ClaudeIntegration(directory: directory).isInstalled
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.tick() }
+        for provider in ProviderID.allCases { configure(provider) }
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in Task { @MainActor in await self?.tick() } }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in await self?.refresh() } }
+        stopObserver = NotificationCenter.default.addObserver(forName: .agentMonitoringWillStop, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.stop() }
         }
-        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in await self?.refresh() }
-        })
-        Task { await refresh(); await updateNotificationStatus() }
+        Task { [weak self] in await self?.refresh(); await self?.updateNotificationStatus() }
     }
     deinit {
         timer?.invalidate()
-        for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        if let stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
+    }
+    private func configure(_ provider: ProviderID) {
+        monitors[provider]?.cancel()
+        let client: any AgentClient = provider == .claude
+            ? ClaudeCLIProvider(executableOverride: claudePath, directory: directory)
+            : CodexProvider(executableOverride: codexPath)
+        let monitor = AgentMonitor(client: client, paused: UserDefaults.standard.bool(forKey: "paused.\(provider.rawValue)"), cachedSnapshot: { [directory] scope in
+            guard let cached = try? UsageFiles.read(ScopedSnapshot.self, from: directory.appendingPathComponent("quota-\(provider.rawValue).json")),
+                  cached.scope == scope, cached.snapshot.provider == provider,
+                  !cached.snapshot.windows.isEmpty,
+                  cached.snapshot.windows.allSatisfy({ $0.usedPercent.isFinite && (0...100).contains($0.usedPercent) }) else { return nil }
+            return cached.snapshot
+        })
+        monitors[provider] = monitor; providers[provider] = monitor.state
+        monitor.onChange = { [weak self, weak monitor] state in
+            guard let self, let monitor, self.monitors[provider] === monitor else { return }
+            let previous = self.providers[provider]?.snapshot
+            self.providers[provider] = state
+            if state.connected, let scope = state.scope, let snapshot = state.snapshot, snapshot != previous {
+                do { try UsageFiles.write(ScopedSnapshot(scope: scope, snapshot: snapshot), to: self.directory.appendingPathComponent("quota-\(provider.rawValue).json")) }
+                catch { self.settingsMessage = "Usage updated, but its private snapshot could not be saved."; self.settingsError = true }
+            }
+        }
     }
     var isRefreshing: Bool { providers.values.contains(where: \.refreshing) }
     func menuValue(_ provider: ProviderID) -> String {
-        guard let state = providers[provider], state.connected,
-              let remaining = state.snapshot?.remaining(at: now) else { return "—" }
+        guard let state = providers[provider], state.connected, let remaining = state.snapshot?.remaining(at: now) else { return "—" }
         return "\(Int(remaining.rounded(.down)))%"
     }
     func status(_ provider: ProviderID) -> String {
-        guard let state = providers[provider] else { return "Set up" }
+        guard let state = providers[provider] else { return "Checking" }
+        if state.phase == .signingIn { return state.phase.title }
         if state.refreshing { return "Updating" }
-        if state.error != nil { return state.snapshot == nil ? "Needs attention" : "Unavailable" }
-        guard let snapshot = state.snapshot else { return "Set up" }
+        guard state.connected, let snapshot = state.snapshot else { return state.phase.title }
         if snapshot.isStale(at: now) { return "Stale" }
         if snapshot.windows.allSatisfy({ $0.isExpired(at: now) }) { return "Awaiting update" }
-        return provider == .claude ? "Claude Code" : "Connected"
+        return "Connected"
     }
     private func tick() async {
         now = Date()
-        await refreshClaude()
-        if now >= nextCodexRefresh { await refreshCodex() }
+        async let claude: Void = monitors[.claude]?.refresh() ?? ()
+        async let codex: Void = monitors[.codex]?.refresh() ?? ()
+        _ = await (claude, codex)
         await evaluateAlerts()
     }
     func refresh() async {
         guard !preview else { return }
         now = Date()
-        await refreshClaude(force: true)
-        await refreshCodex()
-        await evaluateAlerts()
+        async let claude: Void = monitors[.claude]?.refresh(force: true) ?? ()
+        async let codex: Void = monitors[.codex]?.refresh(force: true) ?? ()
+        _ = await (claude, codex)
+        now = Date(); await evaluateAlerts()
     }
-    private func refreshClaude(force: Bool = false) async {
-        let url = directory.appendingPathComponent("claude.json")
-        let modification = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
-        guard force || modification != lastClaudeModification else { return }
-        lastClaudeModification = modification
-        do {
-            let snapshot = try await ClaudeProvider(directory: directory).fetch()
-            providers[.claude] = ProviderState(snapshot: snapshot, connected: true)
-        } catch {
-            providers[.claude]?.error = error.localizedDescription
-            providers[.claude]?.connected = false
+    func signIn(_ provider: ProviderID) {
+        guard !preview else { return }
+        Task { [weak self] in
+            await self?.monitors[provider]?.signIn { url in await MainActor.run { NSWorkspace.shared.open(url) } }
+            await self?.evaluateAlerts()
         }
     }
-    private func refreshCodex() async {
-        guard providers[.codex]?.refreshing != true else { return }
-        providers[.codex]?.refreshing = true
-        nextCodexRefresh = Date().addingTimeInterval(300)
-        do {
-            let snapshot = try await CodexProvider(executableOverride: codexPath).fetch()
-            providers[.codex] = ProviderState(snapshot: snapshot, connected: true)
-            failureCount = 0
-            do { try UsageFiles.write(snapshot, to: directory.appendingPathComponent("codex.json")) }
-            catch { settingsMessage = "Usage updated, but the local cache could not be saved."; settingsError = true }
-        } catch {
-            providers[.codex]?.refreshing = false
-            providers[.codex]?.error = error.localizedDescription
-            providers[.codex]?.connected = false
-            failureCount = min(failureCount + 1, 6)
-            nextCodexRefresh = Date().addingTimeInterval(min(300, 15 * pow(2, Double(failureCount - 1))))
-        }
-        now = Date()
+    func cancelSignIn(_ provider: ProviderID) { monitors[provider]?.cancel() }
+    func setPaused(_ provider: ProviderID, _ value: Bool) {
+        guard !preview else { return }
+        UserDefaults.standard.set(value, forKey: "paused.\(provider.rawValue)")
+        Task { [weak self] in await self?.monitors[provider]?.setPaused(value) }
     }
-    func saveCodexPath() {
-        codexPath = codexPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        UserDefaults.standard.set(codexPath, forKey: "codexPath")
-        Task { await refresh() }
+    func savePath(_ provider: ProviderID) {
+        guard !preview else { return }
+        if provider == .claude { claudePath = claudePath.trimmingCharacters(in: .whitespacesAndNewlines) }
+        else { codexPath = codexPath.trimmingCharacters(in: .whitespacesAndNewlines) }
+        UserDefaults.standard.set(provider == .claude ? claudePath : codexPath, forKey: provider == .claude ? "claudePath" : "codexPath")
+        configure(provider)
+        Task { [weak self] in await self?.monitors[provider]?.refresh(force: true) }
     }
-    func chooseCodex() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose the Codex executable"
+    func chooseExecutable(_ provider: ProviderID) {
+        guard !preview else { return }
+        let panel = NSOpenPanel(); panel.title = "Choose the \(provider == .claude ? "Claude Code" : "Codex") executable"
         panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url { codexPath = url.path; saveCodexPath() }
-    }
-    func connectClaude() {
-        do {
-            let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/UsageBridge")
-            try ClaudeIntegration(directory: directory).install(helper: helper)
-            integrationInstalled = true
-            settingsMessage = "Connected. Start a new Claude Code session and send a message to publish usage."
-            settingsError = false
-        } catch { settingsMessage = error.localizedDescription; settingsError = true }
+        if panel.runModal() == .OK, let url = panel.url {
+            if provider == .claude { claudePath = url.path } else { codexPath = url.path }
+            savePath(provider)
+        }
     }
     func restoreClaude() {
+        guard !preview else { return }
         do {
-            try ClaudeIntegration(directory: directory).restore()
-            integrationInstalled = false
-            settingsMessage = "Your previous Claude status line is restored. Restart Claude Code to stop capture."
-            settingsError = false
+            try ClaudeIntegration(directory: directory).restore(); integrationInstalled = false
+            settingsMessage = "Your previous status line is restored. Restart older Claude Code sessions to stop capture."; settingsError = false
         } catch { settingsMessage = error.localizedDescription; settingsError = true }
     }
+    func forgetExperimentalConnection() {
+        guard !preview else { return }
+        do {
+            try ExperimentalConnectionCleanup.forget()
+            settingsMessage = "The widget's experimental saved connection was removed. Agent sign-ins are unchanged."; settingsError = false
+        } catch { settingsMessage = error.localizedDescription; settingsError = true }
+    }
+    func stop() { timer?.invalidate(); for monitor in monitors.values { monitor.cancel() } }
     func setLogin(_ enabled: Bool) {
+        guard !preview else { return }
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             loginEnabled = SMAppService.mainApp.status == .enabled
@@ -162,6 +174,7 @@ final class MonitorStore: ObservableObject {
         } catch { loginEnabled = SMAppService.mainApp.status == .enabled; settingsMessage = error.localizedDescription; settingsError = true }
     }
     func setAlerts(_ enabled: Bool) async {
+        guard !preview else { return }
         if enabled {
             do {
                 alertsEnabled = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
@@ -177,27 +190,29 @@ final class MonitorStore: ObservableObject {
     }
     private func evaluateAlerts() async {
         guard alertsEnabled, !preview, !evaluatingAlerts else { return }
-        evaluatingAlerts = true
-        defer { evaluatingAlerts = false }
+        evaluatingAlerts = true; defer { evaluatingAlerts = false }
         let center = UNUserNotificationCenter.current()
         let authorization = await center.notificationSettings()
         guard authorization.authorizationStatus == .authorized || authorization.authorizationStatus == .provisional else { return }
         for provider in ProviderID.allCases {
-            guard let state = providers[provider], state.connected, let snapshot = state.snapshot else { continue }
+            guard let state = providers[provider], state.connected, let scope = state.scope, let snapshot = state.snapshot else { continue }
+            let url = directory.appendingPathComponent("alerts-\(scope).json")
+            var ledger = ledgers[scope] ?? (try? UsageFiles.read(AlertLedger.self, from: url)) ?? AlertLedger()
             for alert in ledger.candidates(for: snapshot, at: Date()) {
+                guard providers[provider]?.connected == true, providers[provider]?.scope == scope else { break }
                 let content = UNMutableNotificationContent()
                 content.title = "\(provider.title) allowance is running low"
                 content.body = "\(alert.window.title): \(Int(alert.window.remaining.rounded(.down)))% remaining."
                 content.sound = .default
                 do {
-                    try await center.add(UNNotificationRequest(identifier: alert.key, content: content, trigger: nil))
-                    ledger.markDelivered(alert, at: Date())
-                    try UsageFiles.write(ledger, to: directory.appendingPathComponent("alerts.json"))
-                } catch { /* Retry delivery on the next refresh; never mark a failed delivery. */ }
+                    try await center.add(UNNotificationRequest(identifier: scope + "|" + alert.key, content: content, trigger: nil))
+                    ledger.markDelivered(alert, at: Date()); ledgers[scope] = ledger
+                    try UsageFiles.write(ledger, to: url)
+                } catch { /* Retry failed notification deliveries; never mark a failed delivery. */ }
             }
         }
     }
-    func openDataFolder() { try? UsageFiles.prepare(directory); NSWorkspace.shared.open(directory) }
+    func openDataFolder() { guard !preview else { return }; try? UsageFiles.prepare(directory); NSWorkspace.shared.open(directory) }
 }
 
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {

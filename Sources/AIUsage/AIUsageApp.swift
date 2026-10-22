@@ -40,6 +40,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     try png.write(to: directory.appendingPathComponent("preview-\(name).png"))
                 }
+                // Exercise new connection states without reading local account data or launching agents.
+                for (name, phase, message) in [
+                    ("sign-in", AgentPhase.signInRequired, "Sign in to read subscription limits."),
+                    ("signing-in", .signingIn, "Complete sign-in in your default browser."),
+                    ("paused", .paused, "Monitoring is paused. Your agent remains signed in."),
+                    ("unavailable", .unavailable, "The provider could not be reached. Try refreshing."),
+                    ("unsupported", .unsupported, "This agent version needs setup or an update.")
+                ] {
+                    let sample = MonitorStore(preview: true)
+                    if phase == .unavailable {
+                        sample.providers[.claude]?.phase = phase
+                        sample.providers[.claude]?.error = message
+                    } else { sample.providers[.claude] = ProviderState(error: message, phase: phase) }
+                    let renderer = ImageRenderer(content: MonitorView(store: sample).environment(\.colorScheme, .light))
+                    renderer.scale = 2
+                    guard let tiff = renderer.nsImage?.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff), let png = bitmap.representation(using: .png, properties: [:]) else {
+                        throw UsageError.unavailable("Could not render sample connection state.")
+                    }
+                    try png.write(to: directory.appendingPathComponent("preview-\(name).png"))
+                }
+                let settingsSample = MonitorStore(preview: true)
+                settingsSample.integrationInstalled = true
+                // Form contains native scroll views, which ImageRenderer omits. Render its own sample window.
+                let settingsHost = NSHostingView(rootView: SettingsView(store: settingsSample).environment(\.colorScheme, .light))
+                let settingsWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 750), styleMask: [.titled], backing: .buffered, defer: false)
+                settingsWindow.isReleasedWhenClosed = false
+                settingsWindow.title = "AI Usage Settings — SAMPLE DATA"
+                settingsWindow.contentView = settingsHost
+                settingsWindow.orderFront(nil)
+                settingsHost.layoutSubtreeIfNeeded()
+                settingsWindow.display()
+                guard let bitmap = settingsHost.bitmapImageRepForCachingDisplay(in: settingsHost.bounds) else {
+                    throw UsageError.unavailable("Could not render sample Settings.")
+                }
+                settingsHost.cacheDisplay(in: settingsHost.bounds, to: bitmap)
+                guard let png = bitmap.representation(using: .png, properties: [:]) else { throw UsageError.unavailable("Could not encode sample Settings.") }
+                try png.write(to: directory.appendingPathComponent("preview-settings.png"))
+                settingsWindow.close()
                 print("Rendered sample-data previews in \(directory.path)")
                 exit(0)
             } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
@@ -54,4 +92,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        NotificationCenter.default.post(name: .agentMonitoringWillStop, object: nil)
+        // Give cancelled workers time to terminate/reap their process groups before the app exits.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+    func applicationWillTerminate(_ notification: Notification) { NotificationCenter.default.post(name: .agentMonitoringWillStop, object: nil) }
 }

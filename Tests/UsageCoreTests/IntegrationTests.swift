@@ -70,19 +70,28 @@ final class IntegrationTests {
     }
     func fakeCodex(error: Bool = false) throws -> URL {
         let file = directory.appendingPathComponent("codex")
-        let response = error ? "{\"id\":2,\"error\":{\"message\":\"authentication required\"}}" : "{\"id\":2,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":12,\"windowDurationMins\":300,\"resetsAt\":1900000000}}}}"
-        let script = """
-        #!/bin/sh
-        initialized=0
-        while IFS= read -r line; do
-          case "$line" in
-            *'"method":"initialize"'*) printf '%s\\n' '{"id":1,"result":{}}' ;;
-            *'"method":"initialized"'*) initialized=1 ;;
-            *'rateLimits'*) [ "$initialized" = 1 ] || exit 1; printf '%s\\n' '\(response)' ;;
-            *) exit 1 ;;
-          esac
-        done
-        """
+        let response = error ? #"{"error":{"message":"authentication required"}}"# : #"{"result":{"rateLimits":{"primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1900000000}}}}"#
+        let script = #"""
+        #!/usr/bin/python3
+        import json, sys
+        initialized = False
+        for line in sys.stdin:
+            request = json.loads(line)
+            method = request['method']
+            if method == 'initialize': response = {'result':{}}
+            elif method == 'initialized':
+                initialized = True
+                continue
+            elif method == 'account/read':
+                assert initialized
+                response = {'result':{'account':{'type':'chatgpt','email':'sample@example.test'}}}
+            elif method == 'account/rateLimits/read':
+                assert initialized
+                response = json.loads('\#(response)')
+            else: raise AssertionError('Unexpected method')
+            response['id'] = request['id']
+            print(json.dumps(response), flush=True)
+        """#
         try Data(script.utf8).write(to: file)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
         return file
