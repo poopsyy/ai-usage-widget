@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- Homebrew cask generation uses the current macOS minimum-version syntax.
+
+## 0.1.0 - 2026-10-23
+
 ### Added
 
 - Native menu bar display for Claude and Codex subscription allowance and reset times.

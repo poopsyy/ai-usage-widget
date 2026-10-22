@@ -37,7 +37,7 @@ def render(version, assets):
   desc "Menu bar monitor for Claude and Codex subscription allowances"
   homepage "https://github.com/poopsyy/ai-usage-widget"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "AI Usage.app"
 

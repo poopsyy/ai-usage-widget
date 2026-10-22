@@ -16,15 +16,15 @@ AI Usage tracks subscription allowance, not API spending or estimated token cons
 
 Requires **macOS 14+** on Apple silicon or Intel. Install and sign in to [Codex CLI](https://developers.openai.com/codex/cli) and/or [Claude Code](https://code.claude.com/docs/en/setup) separately.
 
-### Download
+### Homebrew
 
-Download a build from [Releases](https://github.com/poopsyy/ai-usage-widget/releases): choose `macos-arm64.zip` for Apple silicon or `macos-x86_64.zip` for Intel. Download its matching `.zip.sha256`, verify it with `shasum -a 256 -c <checksum-file>`, unzip, and move **AI Usage.app** to Applications.
+```sh
+brew install --cask poopsyy/tap/ai-usage
+```
 
-Early builds are ad-hoc signed and **not notarized by Apple**. If macOS blocks an app you trust, follow Apple's [per-app approval instructions](https://support.apple.com/en-us/102445). If no app assets are available, build from source.
+Open **AI Usage** from Applications. Quit it before updating with `brew update` followed by `brew upgrade --cask poopsyy/tap/ai-usage`.
 
-### Terminal and Homebrew
-
-For a published release containing `install.sh`:
+### Terminal installer
 
 ```sh
 curl -fsSL https://github.com/poopsyy/ai-usage-widget/releases/latest/download/install.sh | bash
@@ -32,13 +32,11 @@ curl -fsSL https://github.com/poopsyy/ai-usage-widget/releases/latest/download/i
 
 The installer selects the native architecture, verifies the checksum and bundle signature, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it and rerun the command to update. To inspect the script or select a version/location, download it first and run `bash install.sh --help`.
 
-Once the project's Homebrew tap is available:
+### Download
 
-```sh
-brew install --cask poopsyy/tap/ai-usage
-```
+Download a build from [Releases](https://github.com/poopsyy/ai-usage-widget/releases): choose `macos-arm64.zip` for Apple silicon or `macos-x86_64.zip` for Intel. Download its matching `.zip.sha256`, verify it with `shasum -a 256 -c <checksum-file>`, unzip, and move **AI Usage.app** to Applications.
 
-Update with `brew update` followed by `brew upgrade --cask poopsyy/tap/ai-usage`. Use one installation method to avoid duplicate app copies. These methods require published assets and do not change the notarization status.
+Use one installation method to avoid duplicate app copies. Early builds are ad-hoc signed and **not notarized by Apple**. If macOS blocks an app you trust, follow Apple's [per-app approval instructions](https://support.apple.com/en-us/102445).
 
 ### Build from source
 

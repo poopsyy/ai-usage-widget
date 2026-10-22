@@ -39,6 +39,6 @@ Run `bash scripts/package-release.sh` to build the current architecture's ZIP an
 
 A matching `vX.Y.Z` tag triggers native Apple silicon and Intel builds and creates a **draft** release with both ZIP/checksum pairs, `install.sh`, and a pinned `ai-usage.rb`. Review the assets and release notes before publishing. Keep the ad-hoc signing and lack of notarization explicit.
 
-The terminal installer needs a published release containing `install.sh`. To enable Homebrew, add that release's generated cask as `Casks/ai-usage.rb` in the separate `poopsyy/homebrew-tap` repository. Update the cask only after publishing the matching assets. To generate it locally, supply both architecture ZIP/checksum pairs to `python3 scripts/generate-cask.py X.Y.Z dist`.
+The terminal installer needs a published release containing `install.sh`. To update the [Homebrew tap](https://github.com/poopsyy/homebrew-tap), add that release's generated cask as `Casks/ai-usage.rb` in the separate `poopsyy/homebrew-tap` repository. Update the cask only after publishing the matching assets. To generate it locally, supply both architecture ZIP/checksum pairs to `python3 scripts/generate-cask.py X.Y.Z dist`.
 
 Do not commit generated app bundles, archives, or snapshots. Contributions are distributed under the project's [MIT license](LICENSE).

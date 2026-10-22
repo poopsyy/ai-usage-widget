@@ -151,7 +151,7 @@ fi
         for arch in ("arm64", "x86_64"):
             digest = (self.assets / f"AI-Usage-0.1.0-macos-{arch}.zip.sha256").read_text().split()[0]
             self.assertIn(digest, result)
-        self.assertIn('depends_on macos: ">= :sonoma"', result)
+        self.assertIn('depends_on macos: :sonoma', result)
         self.assertIn('app "AI Usage.app"', result)
 
     def test_cask_refuses_missing_or_modified_assets_and_bad_version(self):
