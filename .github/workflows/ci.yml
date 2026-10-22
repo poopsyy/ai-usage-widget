@@ -1,0 +1,36 @@
+name: macOS checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: bash scripts/test.sh
+      - run: bash scripts/package-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AI-Usage-macos-${{ matrix.architecture }}
+          path: |
+            dist/AI-Usage-*.zip
+            dist/AI-Usage-*.zip.sha256
+          if-no-files-found: error

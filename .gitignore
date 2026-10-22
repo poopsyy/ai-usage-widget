@@ -1,0 +1,45 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Build output
+dist/
+build/
+out/
+coverage/
+# Swift and local build artifacts
+.build/
+.swiftpm/
+*.xcuserstate
+__pycache__/
+*.py[cod]
+
+# Provider/account state must never be published
+.claude/
+.codex/
+.aws/
+*.keychain
+*.keychain-db
+*.p12
+*.p8
+*.mobileprovision
+claude-settings-backup-*.json
+claude-integration.json
+claude.json
+codex.json
+alerts.json

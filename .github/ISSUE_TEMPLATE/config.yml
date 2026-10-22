@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Installation and usage guide
+    url: https://github.com/poopsyy/ai-usage-widget/blob/main/docs/USAGE.md
+    about: Check provider setup and troubleshooting before opening an issue.
+  - name: Report a security concern
+    url: https://github.com/poopsyy/ai-usage-widget/blob/main/SECURITY.md
+    about: Use the private reporting instructions; do not post sensitive details publicly.
