@@ -11,7 +11,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "UsageCore"),
-        .executableTarget(name: "AIUsage", dependencies: ["UsageCore"]),
+        .executableTarget(name: "AIUsage", dependencies: ["UsageCore"], resources: [.process("Resources")]),
         .executableTarget(name: "UsageBridge", dependencies: ["UsageCore"]),
         .executableTarget(name: "UsageChecks", dependencies: ["UsageCore"], path: "Tests/UsageCoreTests")
     ],

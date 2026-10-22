@@ -13,6 +13,7 @@ User-visible changes are recorded here. Entries under **Unreleased** describe re
 
 ### Changed
 
+- Official Claude and Codex logos in provider cards and Settings, with light and dark Codex icons.
 - Matching app, widget, and menu bar icons, with clearer provider and action symbols.
 - Menu bar shows only the two-bar icon; usage appears in the popover.
 - Shorter labels, settings, and connection messages. Claude's experimental status stays visible.

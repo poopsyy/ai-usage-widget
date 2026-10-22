@@ -3,6 +3,25 @@ import SwiftUI
 import UsageCore
 
 enum AppImages {
+    /// Packaged apps keep the SwiftPM bundle in Contents/Resources.
+    static let providers: Bundle = {
+        if let url = Bundle.main.url(forResource: "AIUsage_AIUsage", withExtension: "bundle"),
+           let bundle = Bundle(url: url) { return bundle }
+        return .module
+    }()
+
+    static let claude = providerImage("claude")
+    static let codexLight = providerImage("codex-light")
+    static let codexDark = providerImage("codex-dark")
+
+    private static func providerImage(_ name: String) -> NSImage {
+        guard let url = providers.url(forResource: name, withExtension: "png"),
+              let image = NSImage(contentsOf: url) else {
+            fatalError("Missing bundled provider logo: \(name)")
+        }
+        return image
+    }
+
     /// A template image stays legible in both menu bar appearances.
     static let menuBar: NSImage = {
         let image = NSImage(size: NSSize(width: 13, height: 14), flipped: false) { _ in
@@ -35,12 +54,24 @@ struct AppIcon: View {
 
 struct ProviderIcon: View {
     let provider: ProviderID
+    var size: CGFloat = 30
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var image: NSImage {
+        provider == .claude ? AppImages.claude : (colorScheme == .dark ? AppImages.codexDark : AppImages.codexLight)
+    }
+
     var body: some View {
-        Image(systemName: provider == .claude ? "sun.max.fill" : "terminal.fill")
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(Palette.accent(provider))
-            .frame(width: 30, height: 30)
-            .background(Palette.accent(provider).opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
-            .accessibilityHidden(true)
+        Group {
+            if provider == .claude {
+                Image(nsImage: image).resizable().scaledToFit()
+                    .frame(width: size * 0.65, height: size * 0.65)
+                    .frame(width: size, height: size)
+                    .background(Palette.claude.opacity(0.12), in: RoundedRectangle(cornerRadius: size * 0.3))
+            } else {
+                Image(nsImage: image).resizable().scaledToFit()
+                    .frame(width: size, height: size)
+            }
+        }.accessibilityHidden(true)
     }
 }

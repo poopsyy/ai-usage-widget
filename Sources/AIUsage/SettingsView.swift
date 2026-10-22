@@ -44,7 +44,7 @@ struct SettingsView: View {
                     }
                     if state.phase == .signingIn { Text("Finish sign-in in your browser.").font(.caption).foregroundStyle(.secondary) }
                 } header: {
-                    Label(provider.title, systemImage: provider == .claude ? "sun.max.fill" : "terminal.fill")
+                    Label { Text(provider.title) } icon: { ProviderIcon(provider: provider, size: 18) }
                 }
             }
 

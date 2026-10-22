@@ -123,4 +123,4 @@ See [account connection status](docs/ACCOUNT_CONNECTIONS.md) for supported inter
 
 ## License
 
-[MIT](LICENSE). Claude and Codex names belong to their respective owners.
+[MIT](LICENSE). Claude and Codex names and logos belong to their respective owners. See [logo sources](docs/brand/README.md).
