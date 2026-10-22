@@ -1,39 +1,29 @@
 # Contributing
 
-Thanks for helping improve AI Usage. Bugs, documentation fixes, and focused pull requests are welcome. Read the [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+Focused bug fixes, documentation improvements, and pull requests are welcome. Follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities using [Security](SECURITY.md).
 
-## Set up locally
+## Development
 
-Use a Mac with macOS 14 or later, Swift 6 or later, Apple's Command Line Tools, and Python 3. Full Xcode is optional.
+Use macOS 14+, Swift 6+, Apple's Command Line Tools, and Python 3. Full Xcode is optional.
 
 ```sh
 git clone https://github.com/poopsyy/ai-usage-widget.git
 cd ai-usage-widget
 bash scripts/test.sh
 bash scripts/build-app.sh debug
-open "dist/AI Usage.app"
-```
-
-Fork the repository if you do not have push access, then create a branch for your change. Provider accounts are optional for development: the automated checks use fixtures.
-
-## Make a change
-
-- Keep provider parsing and alert logic in `UsageCore`; keep UI behavior in `AIUsage`.
-- Use provider-reported quotas and reset times. Never infer subscription allowances from token counts.
-- Preserve existing Claude settings and status-line output. Keep setup reversible.
-- Use synthetic fixtures. Do not add account data, session payloads, credentials, absolute home paths, or live quota screenshots.
-- Match the existing Swift style and keep new dependencies justified.
-- Update the relevant guide and `CHANGELOG.md` when user-visible behavior changes.
-
-For layout work, use the sample-data preview:
-
-```sh
 open -n "dist/AI Usage.app" --args --preview
 ```
 
-Preview mode uses labeled sample data, skips account-data reads and provider polling, and disables Settings mutations. Automated integration tests use fake executables; do not invoke a real agent or send a model prompt to run checks. Live-account validation requires a separately authorized task.
+Preview mode uses labeled synthetic data and disables provider polling and Settings changes. Automated tests use fake provider executables and need no signed-in accounts. Use `scripts/test.sh` rather than `swift test`.
 
-## Verify
+## Changes and validation
+
+- Keep provider logic in `UsageCore` and AppKit/SwiftUI presentation in `AIUsage`.
+- Preserve reported quota windows, unknown fields, stale states, existing settings, and restoration safeguards.
+- Use synthetic fixtures. Never commit credentials, account payloads, personal paths, settings backups, or live account screenshots.
+- Add meaningful tests for behavior changes and update public instructions and the changelog as needed.
+
+Before submitting:
 
 ```sh
 bash scripts/test.sh
@@ -41,14 +31,14 @@ bash scripts/build-app.sh
 git diff --check
 ```
 
-The test script runs a standalone Swift check executable and Python tests of the compiled helper. Use this script rather than `swift test`; full XCTest is not a dependency.
+Describe the problem, resulting behavior, and checks performed in the pull request. Keep changes focused. Report bugs and feature requests through [Issues](https://github.com/poopsyy/ai-usage-widget/issues), with versions and reproduction steps that exclude private data.
 
-Add tests for meaningful behavior changes, especially parsing, timestamps, alert delivery keys, settings preservation, and failure handling. A documentation-only change needs link and command checks rather than new runtime tests. CI builds and checks both Apple silicon and Intel targets on their native runners.
+## Release packaging
 
-## Open a pull request
+Run `bash scripts/package-release.sh` to build the current architecture's ZIP and SHA-256 checksum under `dist/`. Version arguments must match the app's marketing version. Update the plist and provider client version together before tagging a release.
 
-Explain the problem, resulting behavior, and checks you ran. Include sample-data screenshots for UI changes. Mention any limitations you could not verify. Keep unrelated refactors out of the same PR.
+A matching `vX.Y.Z` tag triggers native Apple silicon and Intel builds and creates a **draft** release with both ZIP/checksum pairs, `install.sh`, and a pinned `ai-usage.rb`. Review the assets and release notes before publishing. Keep the ad-hoc signing and lack of notarization explicit.
 
-Use [issues](https://github.com/poopsyy/ai-usage-widget/issues) for reproducible bugs and feature requests. Include macOS version, CPU architecture, app version, and provider CLI version. Redact account identifiers and paths. Report security issues privately as described in [SECURITY.md](SECURITY.md).
+The terminal installer needs a published release containing `install.sh`. To enable Homebrew, add that release's generated cask as `Casks/ai-usage.rb` in the separate `poopsyy/homebrew-tap` repository. Update the cask only after publishing the matching assets. To generate it locally, supply both architecture ZIP/checksum pairs to `python3 scripts/generate-cask.py X.Y.Z dist`.
 
-By contributing, you agree that your contribution is distributed under the project's [MIT license](LICENSE).
+Do not commit generated app bundles, archives, or snapshots. Contributions are distributed under the project's [MIT license](LICENSE).

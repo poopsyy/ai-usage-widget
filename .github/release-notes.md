@@ -1,15 +1,23 @@
 ## AI Usage
 
-A native macOS menu bar monitor for Claude Code and Codex subscription allowances.
+A native macOS menu bar app for Claude and Codex subscription allowance.
 
 ### Installation
 
-Requires macOS 14 or later. Download the `arm64` ZIP for Apple silicon or `x86_64` ZIP for Intel, along with its matching `.sha256` file. Verify the checksum, unzip, and move AI Usage.app to Applications.
+Requires macOS 14+. Download the `arm64` ZIP for Apple silicon or `x86_64` ZIP for Intel and its matching `.sha256`. Verify the checksum, unzip, and move **AI Usage.app** to Applications.
 
-Provider tools are installed separately. Codex reads the account signed in to the local Codex CLI. Claude requires connecting Claude Code in Settings, then sending a message in a new Claude Code Terminal session. Messages in the Claude desktop chat app do not trigger updates.
+Once this is the latest published stable release, the terminal installer is available:
+
+```sh
+curl -fsSL https://github.com/poopsyy/ai-usage-widget/releases/latest/download/install.sh | bash
+```
+
+It selects your native architecture, verifies the download, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it before rerunning the installer to update.
+
+Provider tools are installed separately. Use signed-in Codex CLI and/or compatible Claude Code. Claude integration is experimental and has not passed live-account validation; the Claude desktop app alone is insufficient.
 
 ### Signing and limitations
 
-These early builds are ad-hoc signed and **not notarized by Apple**. macOS may block a downloaded build. Review the installation guide before deciding whether to run it. There is no API spending view, usage history, or automatic app updater.
+These builds are ad-hoc signed and **not notarized by Apple**. Review the [installation instructions](https://github.com/poopsyy/ai-usage-widget#installation) if macOS blocks the app. No API spending view, usage history, or automatic app updater is included.
 
-See the repository's README, installation/usage guides, and CHANGELOG for setup and version-specific details. Maintainers: add this version's changelog highlights and complete download verification before publishing this draft.
+See the [README](https://github.com/poopsyy/ai-usage-widget#readme) and [changelog](https://github.com/poopsyy/ai-usage-widget/blob/main/CHANGELOG.md) for details.

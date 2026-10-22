@@ -14,4 +14,4 @@ assignees: ""
 
 ## Provider and workflow
 
-Which provider or surface is involved: Claude Code, Claude desktop/web, Codex CLI, or something else? Describe how you would use the feature. Check ROADMAP.md before filing a duplicate.
+Which provider or surface is involved: Claude Code, Claude desktop/web, Codex CLI, or something else? Describe how you would use the feature. Check existing issues before filing a duplicate.

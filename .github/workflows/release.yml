@@ -50,6 +50,12 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: release-assets
+      - name: Prepare curl installer and pinned Homebrew cask
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/generate-cask.py "$RELEASE_TAG" release-assets > release-assets/ai-usage.rb
+          cp scripts/install.sh release-assets/install.sh
       - name: Create or update a draft
         env:
           GH_TOKEN: ${{ github.token }}

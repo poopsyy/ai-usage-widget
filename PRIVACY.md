@@ -20,7 +20,7 @@ The default folder is `~/Library/Application Support/AI Usage/`:
 | --- | --- |
 | `quota-claude.json`, `quota-codex.json` | Latest normalized snapshot and hashed account/workspace/profile scope |
 | `alerts-<scope>.json` | Notification delivery keys and timestamps isolated per verified account/profile |
-| `ClaudeProbe/` | Private empty working directory for short-lived Claude probes |
+| `ClaudeProbe/` | Private working directory for short-lived Claude probes; provider-created metadata may remain |
 | `codex.json`, `claude.json`, `alerts.json` | Retained legacy data; ignored by automatic monitoring |
 | `claude-statusline`, `claude.lock` | Retained helper and lock for older sessions |
 | `claude-integration.json` | Legacy setup metadata and previous status line |
@@ -42,4 +42,4 @@ The previous embedded WebKit sign-in experiment has been removed. It may have le
 
 Pausing stops the widget's provider checks and alerts, hides its reading, and leaves the official agent signed in. Nothing is uploaded to a project-operated server. Notification text contains provider name and remaining allowance and may appear on screen under macOS settings.
 
-For removal, restore any legacy status line, restart older Claude Code sessions, forget an experimental connection if applicable, disable launch at login, and quit. Then delete the app/data folder and optionally its `dev.local.ai-usage-widget` preferences. Removing the widget does not remove provider tools or sign them out. See [uninstallation](docs/INSTALLATION.md#uninstall).
+For removal, restore any legacy status line, restart older Claude Code sessions, forget an experimental connection if applicable, disable launch at login, and quit. Then delete the app/data folder and optionally its `dev.local.ai-usage-widget` preferences. Removing the widget does not remove provider tools or sign them out. See [removal instructions](README.md#removal).

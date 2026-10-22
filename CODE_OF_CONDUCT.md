@@ -1,18 +1,11 @@
 # Code of Conduct
 
-Treat contributors and users with respect. This applies to issues, pull requests, reviews, and other project spaces.
+Treat contributors and users respectfully across issues, pull requests, reviews, and other project spaces.
 
-## Expected behavior
+- Discuss ideas without personal attacks and give specific, constructive feedback.
+- Respect privacy. Do not post account details, private messages, credentials, or usage records.
+- Keep discussions relevant. Harassment, discrimination, threats, and spam are unacceptable.
 
-- Discuss ideas and code without personal attacks.
-- Give constructive, specific feedback and make room for different experience levels.
-- Respect privacy. Do not post another person's account details, private messages, credentials, or usage records.
-- Keep discussion relevant to the project.
+To report a concern, use the [repository reporting options](https://github.com/poopsyy/ai-usage-widget/security). If no private channel is available, open an issue requesting one without sensitive details. Follow [Security](SECURITY.md) for vulnerability reports.
 
-Harassment, discrimination, threats, spam, and deliberately exposing private information are not acceptable.
-
-## Reporting and enforcement
-
-Report concerns to the maintainer through the contact options on [repository reporting options](https://github.com/poopsyy/ai-usage-widget/security). If no private contact option is available, open an issue asking for a private reporting channel without posting sensitive details. Security reports should follow [SECURITY.md](SECURITY.md).
-
-Maintainers may edit or remove inappropriate content, close discussions, or restrict participation. They should explain their action where appropriate and handle reports with discretion.
+Maintainers may remove inappropriate content, close discussions, or restrict participation, and should handle reports discreetly.
