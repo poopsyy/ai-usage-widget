@@ -4,6 +4,13 @@ User-visible changes are recorded here. Entries under **Unreleased** describe re
 
 ## Unreleased
 
+### Fixed
+
+- Repeated Claude refreshes no longer fail just because the agent left local metadata in its private probe folder. Existing files are preserved; automatic trust still requires an empty, verified folder.
+- Claude probes wait for an actual input prompt instead of rejecting a quiet startup banner after one second.
+- Claude probe failures now identify the failing setup stage; authentication-command failures no longer masquerade as a confirmed sign-out. Recoverable startup failures preserve labeled last-known usage instead of removing it.
+- Added a privacy-preserving `UsageBridge --check-claude` diagnostic that prints only success or a fixed error message, never account details, quota values, or captured output.
+
 ### Changed
 
 - Matching app, widget, and menu bar icons, with clearer provider and action symbols.

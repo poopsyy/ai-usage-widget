@@ -22,7 +22,7 @@ public struct ClaudeCLIProvider: AgentClient {
             let before = try self.auth(executable, directory: cwd, cancellation: cancellation, deadline: deadline)
             let help = try self.command(executable, arguments: ["--help"], directory: cwd, cancellation: cancellation, deadline: deadline)
             let helpText = String(decoding: help, as: UTF8.self)
-            guard ["--safe-mode", "--strict-mcp-config", "--settings", "--session-id", "--no-chrome", "--disallowed-tools"].allSatisfy(helpText.contains) else { throw AgentError.setupRequired(.claude) }
+            guard ["--safe-mode", "--strict-mcp-config", "--settings", "--session-id", "--no-chrome", "--disallowed-tools"].allSatisfy(helpText.contains) else { throw AgentError.claudeProbeSetup(.capabilities) }
             let arguments = ["--safe-mode", "--allowed-tools", "", "--disallowed-tools", "*", "--no-chrome", "--strict-mcp-config", "--settings",
                              #"{"disableAllHooks":true,"remoteControlAtStartup":false,"promptSuggestionEnabled":false}"#,
                              "--session-id", UUID().uuidString.lowercased()]
@@ -30,7 +30,7 @@ public struct ClaudeCLIProvider: AgentClient {
             do {
                 let process = try AgentProcess(executable: executable, arguments: arguments, provider: .claude, directory: cwd, environment: self.probeEnvironment(executable), terminal: true, timeout: max(0, deadline - ProcessInfo.processInfo.systemUptime), cancellation: cancellation)
                 defer { process.stop() }
-                snapshot = try self.probe(process)
+                snapshot = try self.probe(process, directory: cwd)
             }
             let after = try self.auth(executable, directory: cwd, cancellation: cancellation, deadline: deadline)
             guard before?.scope == after?.scope else { throw AgentError.identityChanged }
@@ -51,13 +51,16 @@ public struct ClaudeCLIProvider: AgentClient {
         return result
     }
     private func prepareDirectory() throws -> URL {
-        try UsageFiles.prepare(directory)
-        let root = directory.resolvingSymlinksInPath()
-        let cwd = root.appendingPathComponent("ClaudeProbe", isDirectory: true)
-        try UsageFiles.prepare(cwd)
-        guard cwd.resolvingSymlinksInPath().standardizedFileURL == cwd.standardizedFileURL,
-              try FileManager.default.contentsOfDirectory(atPath: cwd.path).isEmpty else { throw AgentError.setupRequired(.claude) }
-        return cwd
+        do {
+            try UsageFiles.prepare(directory)
+            let root = directory.resolvingSymlinksInPath()
+            let cwd = root.appendingPathComponent("ClaudeProbe", isDirectory: true)
+            try UsageFiles.prepare(cwd)
+            guard cwd.resolvingSymlinksInPath().standardizedFileURL == cwd.standardizedFileURL else { throw AgentError.claudeProbeSetup(.workingDirectory) }
+            // Claude can leave local metadata after a successful read. Preserve it and keep polling;
+            // directory emptiness is required only if a new trust confirmation is actually requested.
+            return cwd
+        } catch { throw AgentError.claudeProbeSetup(.workingDirectory) }
     }
     private func probeEnvironment(_ executable: URL, allowBrowser: Bool = false) -> [String: String] {
         var env = environment
@@ -77,14 +80,16 @@ public struct ClaudeCLIProvider: AgentClient {
         defer { process.stop() }
         let data = try process.collect()
         guard process.exitCode == 0 else {
-            if arguments == ["auth", "status"] { throw AgentError.signedOut(.claude) }
-            throw AgentError.setupRequired(.claude)
+            if arguments == ["auth", "status"],
+               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               root["loggedIn"] as? Bool == false { throw AgentError.signedOut(.claude) }
+            throw AgentError.claudeProbeSetup(.commandFailed)
         }
         return data
     }
     private func auth(_ executable: URL, directory: URL, cancellation: AgentCancellation, deadline: TimeInterval) throws -> AccountIdentity? {
         let data = try command(executable, arguments: ["auth", "status"], directory: directory, cancellation: cancellation, deadline: deadline)
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let loggedIn = root["loggedIn"] as? Bool else { throw AgentError.setupRequired(.claude) }
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let loggedIn = root["loggedIn"] as? Bool else { throw AgentError.claudeProbeSetup(.authenticationFormat) }
         guard loggedIn else { throw AgentError.signedOut(.claude) }
         guard let method = root["authMethod"] as? String, ["claude.ai", "oauth_token"].contains(method) else { throw AgentError.unsupported(.claude) }
         let account = (root["accountUuid"] as? String) ?? (root["email"] as? String)
@@ -92,14 +97,19 @@ public struct ClaudeCLIProvider: AgentClient {
         return AccountIdentity(provider: .claude, accountID: account, workspaceID: root["orgId"] as? String,
                                displayName: "Claude account", profile: (root["configDirectory"] as? String) ?? environment["CLAUDE_CONFIG_DIR"] ?? "default")
     }
-    private func probe(_ process: AgentProcess) throws -> UsageSnapshot {
+    private func probe(_ process: AgentProcess, directory: URL) throws -> UsageSnapshot {
         var captured = Data(), commandSent = false, trustResponses = 0
         var lastOutput = ProcessInfo.processInfo.systemUptime
         var ready = lastOutput + 1
         var previousScreen = ""
         var queryTail = Data()
         while true {
-            let chunk = try process.readChunk()
+            let chunk: Data
+            do { chunk = try process.readChunk() }
+            catch let problem as AgentError {
+                if problem == .timeout(.claude), !commandSent, !captured.isEmpty { throw AgentError.claudeProbeSetup(.startupPrompt) }
+                throw problem
+            }
             if !chunk.isEmpty { captured.append(chunk); lastOutput = ProcessInfo.processInfo.systemUptime }
             queryTail.append(chunk)
             let query = Data([0x1b, 0x5b, 0x36, 0x6e])
@@ -120,22 +130,24 @@ public struct ClaudeCLIProvider: AgentClient {
             if screen != previousScreen {
                 previousScreen = screen
                 if trustPending {
-                    guard trustResponses < 4 else { throw AgentError.setupRequired(.claude) }
+                    guard directory.resolvingSymlinksInPath().standardizedFileURL == directory.standardizedFileURL,
+                          (try? FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty) == true else { throw AgentError.claudeProbeSetup(.trustRequired) }
+                    guard trustResponses < 4 else { throw AgentError.claudeProbeSetup(.startupPrompt) }
                     guard let yes = lines.firstIndex(where: { $0.lowercased().contains("yes, i trust this folder") }),
-                          let selected = lines.firstIndex(where: { $0.contains("❯") && ($0.lowercased().contains("trust") || $0.lowercased().contains("exit")) }) else { throw AgentError.setupRequired(.claude) }
+                          let selected = lines.firstIndex(where: { $0.contains("❯") && ($0.lowercased().contains("trust") || $0.lowercased().contains("exit")) }) else { throw AgentError.claudeProbeSetup(.startupPrompt) }
                     try process.send(selected == yes ? "\r" : (selected < yes ? "\u{1b}[B" : "\u{1b}[A"))
                     trustResponses += 1; ready = ProcessInfo.processInfo.systemUptime + 1
                     continue
                 }
             }
-            if trustPending { continue }
+            if trustPending { if process.hasExited { throw AgentError.unavailable(.claude) }; continue }
             if lower.contains("sign in") || lower.contains("not logged in") || lower.contains("/login") { throw AgentError.signedOut(.claude) }
             if lower.contains("rate limited") || lower.contains("too many requests") { throw AgentError.rateLimited(nil) }
-            if lower.contains("choose the text style") || lower.contains("select login method") || (!promptReady && lower.contains("do you trust")) || lower.contains("permission required") { throw AgentError.setupRequired(.claude) }
+            if lower.contains("choose the text style") || lower.contains("select login method") || (!promptReady && lower.contains("do you trust")) || lower.contains("permission required") { throw AgentError.claudeProbeSetup(.startupPrompt) }
             let idle = ProcessInfo.processInfo.systemUptime - lastOutput
-            if !commandSent, !captured.isEmpty, ProcessInfo.processInfo.systemUptime >= ready, idle >= 0.3 {
+            if !commandSent, promptReady, ProcessInfo.processInfo.systemUptime >= ready, idle >= 0.3 {
                 // Only a recognized empty Claude prompt may receive the built-in command.
-                guard promptReady else { throw AgentError.setupRequired(.claude) }
+                // A quiet startup banner is not a setup failure: wait for the actual prompt.
                 try process.send("/usage\r"); commandSent = true; captured.removeAll(); continue
             }
             if commandSent, idle >= 0.5, let snapshot = try? ClaudeCLIUsage.snapshot(screen: screen) { return snapshot }

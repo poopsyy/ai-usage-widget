@@ -15,15 +15,21 @@ public enum AgentPhase: String, Sendable {
     }
 }
 
+public enum ClaudeProbeIssue: String, Sendable {
+    case workingDirectory, trustRequired, capabilities, authenticationFormat, startupPrompt, commandFailed
+}
+
 public enum AgentError: Error, LocalizedError, Equatable {
     case notInstalled(ProviderID), signedOut(ProviderID), unsupported(ProviderID)
     case unavailable(ProviderID), timeout(ProviderID), invalidResponse(ProviderID)
     case setupRequired(ProviderID), browserFailed, identityChanged, rateLimited(Date?)
+    case claudeProbeSetup(ClaudeProbeIssue)
     public var phase: AgentPhase {
         switch self {
         case .notInstalled: return .notInstalled
         case .signedOut: return .signInRequired
         case .unsupported, .setupRequired: return .unsupported
+        case .claudeProbeSetup(.capabilities), .claudeProbeSetup(.authenticationFormat): return .unsupported
         default: return .unavailable
         }
     }
@@ -39,6 +45,15 @@ public enum AgentError: Error, LocalizedError, Equatable {
         case .browserFailed: return "Can't open sign-in. Sign in through your agent, then refresh."
         case .identityChanged: return "Account changed. Refresh for current usage."
         case .rateLimited: return "Please wait before refreshing."
+        case .claudeProbeSetup(let issue):
+            switch issue {
+            case .workingDirectory: return "Claude's probe folder is unavailable or redirected. Check app-folder permissions."
+            case .trustRequired: return "Claude's probe folder needs trust, but isn't empty. Its files were left untouched."
+            case .capabilities: return "This Claude Code version lacks a background-probe option. Update Claude Code."
+            case .authenticationFormat: return "Claude Code returned an unsupported sign-in status. Update Claude Code."
+            case .startupPrompt: return "Claude's background prompt wasn't recognized. Refresh, or finish setup in Claude Code."
+            case .commandFailed: return "Claude's background command failed. Refresh or update Claude Code."
+            }
         }
     }
 }

@@ -7,6 +7,24 @@ func option(_ name: String) -> String? {
     return CommandLine.arguments[index + 1]
 }
 
+if CommandLine.arguments.contains("--check-claude") {
+    let path = option("--claude-path") ?? ""
+    let directory = option("--directory").map { URL(fileURLWithPath: $0) } ?? UsageFiles.directory
+    Task {
+        do {
+            _ = try await ClaudeCLIProvider(executableOverride: path, directory: directory).fetchAccount()
+            print("Claude check: quota read succeeded. Account details and usage values omitted.")
+            exit(0)
+        } catch {
+            // Only fixed, app-authored messages: never print captured output or arbitrary errors.
+            let problem = error as? AgentError ?? .unavailable(.claude)
+            print("Claude check: \(problem.localizedDescription)")
+            exit(1)
+        }
+    }
+    dispatchMain()
+}
+
 if CommandLine.arguments.contains("--probe-codex") {
     let override = option("--codex-path") ?? ""
     Task {

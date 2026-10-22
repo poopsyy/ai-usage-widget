@@ -80,9 +80,13 @@ final class AgentTests {
         do { _ = try await provider.fetchAccount(); fail("Expected sign-in required") }
         catch { expectEqual(error as? AgentError, .signedOut(.claude)) }
         expectFalse(FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent("calls").path))
+        provider = try fixture.claude(mode: "authCommandFailure")
+        do { _ = try await provider.fetchAccount(); fail("A command failure must not claim the account is signed out") }
+        catch { expectEqual(error as? AgentError, .claudeProbeSetup(.commandFailed)) }
         provider = try fixture.claude(mode: "unknownPrompt")
+        provider.probeTimeout = 2
         do { _ = try await provider.fetchAccount(); fail("Expected setup required") }
-        catch { expectEqual(error as? AgentError, .setupRequired(.claude)) }
+        catch { expectEqual(error as? AgentError, .claudeProbeSetup(.startupPrompt)) }
         provider = try fixture.claude(mode: "hang")
         provider.probeTimeout = 0.3
         do { _ = try await provider.fetchAccount(); fail("Expected deadline") }
@@ -99,6 +103,36 @@ final class AgentTests {
         do { _ = try await provider.fetchAccount(); fail("Expected changed-account rejection") }
         catch { expectEqual(error as? AgentError, .identityChanged) }
     }
+    func testClaudeRefreshPreservesProbeMetadata() async throws {
+        let fixture = try AgentFixture()
+        let provider = try fixture.claude(mode: "metadata")
+        _ = try await provider.fetchAccount()
+        let marker = fixture.root.appendingPathComponent("app/ClaudeProbe/.claude/probe-marker")
+        expectTrue(FileManager.default.fileExists(atPath: marker.path))
+        _ = try await provider.fetchAccount()
+        expectEqual(try String(contentsOf: marker, encoding: .utf8), "synthetic provider metadata")
+        let needsTrust = try fixture.claude(mode: "trust")
+        do { _ = try await needsTrust.fetchAccount(); fail("A nonempty directory must not receive automatic trust") }
+        catch { expectEqual(error as? AgentError, .claudeProbeSetup(.trustRequired)) }
+        expectEqual(try String(contentsOf: marker, encoding: .utf8), "synthetic provider metadata")
+    }
+    func testClaudeDiagnosticOmitsPrivateOutput() throws {
+        let fixture = try AgentFixture()
+        let provider = try fixture.claude()
+        let process = Process(), pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("UsageBridge")
+        process.arguments = ["--check-claude", "--claude-path", provider.executableOverride, "--directory", provider.directory.path]
+        process.environment = provider.environment
+        process.standardOutput = pipe; process.standardError = FileHandle.nullDevice
+        try process.run()
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        expectEqual(process.terminationStatus, 0)
+        expectEqual(output, "Claude check: quota read succeeded. Account details and usage values omitted.\n")
+        expectFalse(output.contains("PRIVATE-FIXTURE-OUTPUT"))
+        expectFalse(output.contains("example.test"))
+        expectFalse(output.contains("42"))
+    }
     func testClaudeTerminalQueriesAndTrust() async throws {
         let fixture = try AgentFixture()
         _ = try await fixture.claude(mode: "cursorQuery").fetchAccount()
@@ -111,7 +145,11 @@ final class AgentTests {
         try FileManager.default.removeItem(at: fixture.root.appendingPathComponent("app/ClaudeProbe"))
         try FileManager.default.createSymbolicLink(at: fixture.root.appendingPathComponent("app/ClaudeProbe"), withDestinationURL: target)
         do { _ = try await crashing.fetchAccount(); fail("A redirected probe directory must not be trusted") }
-        catch { expectEqual(error as? AgentError, .setupRequired(.claude)) }
+        catch { expectEqual(error as? AgentError, .claudeProbeSetup(.workingDirectory)) }
+    }
+    func testClaudeWaitsForStartupPrompt() async throws {
+        let fixture = try AgentFixture()
+        _ = try await fixture.claude(mode: "delayedPrompt").fetchAccount()
     }
     func testCodexAccountAndBrowserLogin() async throws {
         let fixture = try AgentFixture()
@@ -146,6 +184,9 @@ final class AgentTests {
         await monitor.refresh(force: true)
         expectEqual(monitor.state.phase, .unavailable); expectTrue(monitor.state.snapshot != nil)
         expectTrue(monitor.nextRefresh > Date())
+        await client.setError(.claudeProbeSetup(.startupPrompt))
+        await monitor.refresh(force: true)
+        expectEqual(monitor.state.phase, .unavailable); expectTrue(monitor.state.snapshot != nil)
         await client.setError(.signedOut(.claude))
         await monitor.refresh(force: true); expectNil(monitor.state.snapshot); expectEqual(monitor.state.phase, .signInRequired)
         await client.setError(nil)
@@ -245,6 +286,7 @@ private final class AgentFixture {
         mode = (root / 'mode').read_text()
         args = sys.argv[1:]
         if args == ['auth', 'status']:
+            if mode == 'authCommandFailure': sys.exit(2)
             account = 'b' if mode == 'changedAccount' and (root / 'calls').exists() else 'a'
             print(json.dumps({'loggedIn': mode != 'signedOut', 'authMethod':'claude.ai', 'email':account+'@example.test', 'orgId':'synthetic-org', 'configDirectory':'synthetic-profile'}))
         elif args == ['--help']:
@@ -262,8 +304,15 @@ private final class AgentFixture {
             assert os.environ['BROWSER'] == '/usr/bin/false'
             assert os.environ['CLAUDE_CODE_SKIP_PROMPT_HISTORY'] == '1'
             (root / 'pid').write_text(str(os.getpid()))
+            if mode == 'metadata':
+                metadata = pathlib.Path.cwd() / '.claude'
+                metadata.mkdir(exist_ok=True)
+                (metadata / 'probe-marker').write_text('synthetic provider metadata')
             if mode == 'hang':
                 time.sleep(60)
+            if mode == 'delayedPrompt':
+                print('Starting Claude Code…', flush=True)
+                time.sleep(1.6)
             if mode in ['cursorQuery', 'trust']:
                 previous = termios.tcgetattr(0)
                 tty.setraw(0)
