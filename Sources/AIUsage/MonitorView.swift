@@ -15,14 +15,10 @@ struct MonitorView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Palette.codex)
-                    .frame(width: 36, height: 36)
-                    .background(Palette.codex.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+                AppIcon()
                 VStack(alignment: .leading, spacing: 3) {
                     Text("AI Usage").font(.system(size: 17, weight: .semibold))
-                    Text(store.preview ? "PREVIEW · SAMPLE DATA" : "Your allowance, at a glance")
+                    Text(store.preview ? "Sample data" : "Allowance left")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -42,7 +38,7 @@ struct MonitorView: View {
 
             HStack(spacing: 5) {
                 Image(systemName: "clock").font(.system(size: 10))
-                Text("Checks every 5 min · No open session needed")
+                Text("Updates every 5 min")
                     .font(.system(size: 10))
                 Spacer(minLength: 0)
             }
@@ -55,7 +51,7 @@ struct MonitorView: View {
                     NSApp.activate(ignoringOtherApps: true)
                 } label: { Label("Settings", systemImage: "gearshape") }
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
+                Button { NSApp.terminate(nil) } label: { Label("Quit", systemImage: "power") }.keyboardShortcut("q")
             }
             .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             .padding(.horizontal, 22).padding(.vertical, 14)
@@ -77,10 +73,14 @@ private struct ProviderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(spacing: 9) {
-                Image(systemName: provider == .claude ? "sun.max" : "terminal")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(accent)
-                    .frame(width: 30, height: 30).background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
-                Text(provider.title).font(.system(size: 14, weight: .semibold))
+                ProviderIcon(provider: provider)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(provider.title).font(.system(size: 14, weight: .semibold))
+                    if provider == .claude {
+                        Text("Experimental").font(.system(size: 9)).foregroundStyle(.secondary)
+                            .help("Requires Claude Code. Live support unverified.")
+                    }
+                }
                 Spacer()
                 Text(status).font(.system(size: 10, weight: .medium))
                     .foregroundStyle(state.error != nil || state.snapshot?.isStale(at: now) == true ? Color.orange : .secondary)
@@ -96,7 +96,7 @@ private struct ProviderCard: View {
                 if let error = state.error {
                     Text(error).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else if snapshot.isStale(at: now), provider == .claude {
-                    Text("Refresh to request a new reading from Claude Code.").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text("Refresh for current usage.").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 HStack(spacing: 4) {
                     Circle().fill(snapshot.isStale(at: now) || !state.connected ? .orange : accent).frame(width: 4, height: 4)
@@ -106,21 +106,33 @@ private struct ProviderCard: View {
                 }.foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(state.error ?? (state.phase == .paused ? "Monitoring is paused. Your agent remains signed in." : "Checking the installed agent and its existing sign-in…"))
+                    Text(state.error ?? emptyMessage)
                         .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     usageLink
                 }.padding(.bottom, 3)
             }
-            if state.phase == .signInRequired { Button("Sign in using default browser", action: signIn).font(.system(size: 11)) }
-            if state.phase == .signingIn {
-                Text("Complete sign-in in your default browser.").font(.system(size: 11)).foregroundStyle(.secondary)
-                Button("Cancel sign-in", action: cancel).font(.system(size: 11))
+            if state.phase == .signInRequired {
+                Button(action: signIn) { Label("Sign in", systemImage: "person.crop.circle") }
+                    .buttonStyle(.borderedProminent).controlSize(.small).tint(accent)
+                    .help("Sign in using your default browser")
             }
-            if state.phase == .paused { Button("Resume monitoring", action: resume).font(.system(size: 11)) }
+            if state.phase == .signingIn {
+                Button("Cancel sign-in", action: cancel).controlSize(.small)
+            }
+            if state.phase == .paused {
+                Button(action: resume) { Label("Resume", systemImage: "play.fill") }.controlSize(.small)
+            }
         }
         .padding(16)
         .background(.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.primary.opacity(0.07), lineWidth: 1))
+    }
+    var emptyMessage: String {
+        switch state.phase {
+        case .paused: return "Paused. Your agent stays signed in."
+        case .signingIn: return "Finish sign-in in your browser."
+        default: return "Checking account…"
+        }
     }
     var usageLink: some View {
         Button { NSWorkspace.shared.open(provider.usageURL) } label: {
@@ -173,7 +185,7 @@ private struct UsageRow: View {
     }
     var resetDescription: String {
         guard let reset = window.resetsAt else { return "Reset time unavailable" }
-        if expired { return "Reset passed · waiting for provider" }
+        if expired { return "Waiting for fresh usage" }
         let seconds = max(0, Int(reset.timeIntervalSince(now)))
         if seconds >= 86400 { return "Resets in \(seconds / 86400)d \((seconds % 86400) / 3600)h" }
         if seconds >= 3600 { return "Resets in \(seconds / 3600)h \((seconds % 3600) / 60)m" }

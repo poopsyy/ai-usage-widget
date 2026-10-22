@@ -11,8 +11,7 @@ struct AIUsageApp: App {
         MenuBarExtra {
             MonitorView(store: store)
         } label: {
-            Text("C \(store.menuValue(.claude)) · O \(store.menuValue(.codex))")
-                .monospacedDigit()
+            Image(nsImage: AppImages.menuBar)
                 .accessibilityLabel("AI Usage. Claude \(store.menuValue(.claude)) remaining. Codex \(store.menuValue(.codex)) remaining.")
         }
         .menuBarExtraStyle(.window)
@@ -42,11 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 // Exercise new connection states without reading local account data or launching agents.
                 for (name, phase, message) in [
-                    ("sign-in", AgentPhase.signInRequired, "Sign in to read subscription limits."),
-                    ("signing-in", .signingIn, "Complete sign-in in your default browser."),
-                    ("paused", .paused, "Monitoring is paused. Your agent remains signed in."),
-                    ("unavailable", .unavailable, "The provider could not be reached. Try refreshing."),
-                    ("unsupported", .unsupported, "This agent version needs setup or an update.")
+                    ("sign-in", AgentPhase.signInRequired, AgentError.signedOut(.claude).localizedDescription),
+                    ("signing-in", .signingIn, "Finish sign-in in your browser."),
+                    ("paused", .paused, "Paused. Your agent stays signed in."),
+                    ("unavailable", .unavailable, AgentError.unavailable(.claude).localizedDescription),
+                    ("unsupported", .unsupported, AgentError.setupRequired(.claude).localizedDescription)
                 ] {
                     let sample = MonitorStore(preview: true)
                     if phase == .unavailable {

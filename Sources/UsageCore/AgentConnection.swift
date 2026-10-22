@@ -10,7 +10,7 @@ public enum AgentPhase: String, Sendable {
         case .connected: return "Connected"
         case .paused: return "Paused"
         case .unsupported: return "Unsupported"
-        case .unavailable: return "Temporarily unavailable"
+        case .unavailable: return "Unavailable"
         }
     }
 }
@@ -29,16 +29,16 @@ public enum AgentError: Error, LocalizedError, Equatable {
     }
     public var errorDescription: String? {
         switch self {
-        case .notInstalled(let provider): return "Install \(provider == .claude ? "Claude Code" : "Codex") or choose its executable in Settings."
-        case .signedOut(let provider): return "Sign in to \(provider.title) to read subscription limits. You can also use \(provider == .claude ? "claude auth login" : "codex login") in Terminal."
-        case .unsupported(let provider): return "\(provider.title) did not report supported subscription limits. API-key billing is not a subscription allowance."
-        case .unavailable(let provider): return "\(provider.title) could not be reached. Check your connection and try again."
-        case .timeout(let provider): return "\(provider.title) took too long to respond. Try refreshing."
-        case .invalidResponse(let provider): return "\(provider.title) returned an unsupported usage format. Update the agent and try again."
-        case .setupRequired(let provider): return "This \(provider.title) installation needs setup or does not support a safe background probe. Open the official agent to finish setup or update it."
-        case .browserFailed: return "Could not open the official sign-in page. Sign in through the installed agent, then refresh."
-        case .identityChanged: return "The agent account changed during this read. Refresh to read the new account."
-        case .rateLimited: return "The provider asked us to wait before refreshing again."
+        case .notInstalled(let provider): return "Install \(provider == .claude ? "Claude Code" : "Codex"), or choose its path in Settings."
+        case .signedOut(let provider): return "Sign in to \(provider.title), or run \(provider == .claude ? "claude auth login" : "codex login") in Terminal."
+        case .unsupported(let provider): return "\(provider.title) reported no supported subscription limits. API usage isn't supported."
+        case .unavailable(let provider): return "Can't reach \(provider.title). Check your connection."
+        case .timeout(let provider): return "\(provider.title) timed out. Try refreshing."
+        case .invalidResponse(let provider): return "Can't read \(provider.title) usage. Update the agent."
+        case .setupRequired(let provider): return "Open \(provider == .claude ? "Claude Code" : "Codex") to finish setup or update."
+        case .browserFailed: return "Can't open sign-in. Sign in through your agent, then refresh."
+        case .identityChanged: return "Account changed. Refresh for current usage."
+        case .rateLimited: return "Please wait before refreshing."
         }
     }
 }
@@ -107,7 +107,7 @@ public final class AgentMonitor {
         generation += 1
         operation?.cancel()
         state.refreshing = false
-        if state.phase == .signingIn { state.phase = .signInRequired; state.error = "Sign-in was cancelled." }
+        if state.phase == .signingIn { state.phase = .signInRequired; state.error = "Sign-in cancelled." }
     }
     private func launch(login: Bool, openBrowser: @escaping AgentBrowserOpener) async {
         let previous = operation

@@ -4,6 +4,12 @@ User-visible changes are recorded here. Entries under **Unreleased** describe re
 
 ## Unreleased
 
+### Changed
+
+- Matching app, widget, and menu bar icons, with clearer provider and action symbols.
+- Menu bar shows only the two-bar icon; usage appears in the popover.
+- Shorter labels, settings, and connection messages. Claude's experimental status stays visible.
+
 ### Added
 
 - Automatic installed-agent discovery and short-lived subscription quota checks; existing sign-ins require no widget connection step.

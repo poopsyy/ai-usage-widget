@@ -16,7 +16,7 @@ A small macOS menu bar app that shows how much Claude and Codex subscription all
 ## What it does
 
 - Shows remaining allowance and reset countdowns for each reported usage window.
-- Displays a compact `C 42% · O 54%` indicator beside the clock.
+- Shows a compact two-bar icon beside the clock. Click it for usage.
 - Detects installed agents and follows their existing subscription sign-ins.
 - Checks quotas through short-lived agent processes; no test chat or open Terminal session is required.
 - Offers official sign-in through your default browser when requested, plus pause/resume per provider.
@@ -41,7 +41,7 @@ You need **macOS 14 or later**. Provider tools are installed separately: [Codex 
 2. Choose `AI-Usage-<version>-macos-arm64.zip` for Apple silicon, or `AI-Usage-<version>-macos-x86_64.zip` for Intel. Check **Apple menu → About This Mac** if unsure.
 3. Download the matching `.sha256` file and [verify the download](docs/INSTALLATION.md#verify-a-download).
 4. Unzip the archive, move **AI Usage.app** to **Applications**, and open it.
-5. Find `C … · O …` in the menu bar. There is no Dock icon.
+5. Find the two-bar icon in the menu bar. There is no Dock icon.
 
 If no release assets are listed yet, build from source below. GitHub's **Source code** ZIP is not a ready-to-run app.
 
@@ -76,7 +76,7 @@ If a tool is signed out, click **Sign in** in its card or in Settings. The offic
 
 Use **Settings → Claude/Codex → Choose…** if an executable is not detected. No provider tools are installed or bundled by the widget. Claude needs a version with `auth status`, `auth login`, and safe background-probe controls; unfamiliar setup screens stop polling with guidance to finish setup in the official agent.
 
-**Pause monitoring** stops the widget's checks, hides its reading, and suppresses its alerts without signing the agent out. **Resume monitoring** requests a fresh reading. Missing authentication never opens a browser automatically.
+**Pause** stops the widget's checks, hides its reading, and suppresses its alerts without signing the agent out. **Resume** requests a fresh reading. Missing authentication never opens a browser automatically.
 
 ### Upgrading an older connection
 
@@ -86,9 +86,9 @@ If you used the experimental browser connection check, **Forget experimental con
 
 ### Read the indicator
 
-- `C` means Claude; `O` means OpenAI Codex.
-- Percentages and bars show **remaining** allowance. The menu bar uses the lowest remaining percentage among fresh, unexpired windows.
-- `—` means a fresh connected reading is unavailable. Open the popover for the reason.
+- Click the two-bar icon to view Claude and Codex usage.
+- Percentages and bars show **remaining** allowance.
+- Missing readings show a connection status instead of a percentage.
 - Readings older than 15 minutes show **Stale**.
 - **Awaiting update** means the reported reset deadline has passed and a new reading is needed.
 

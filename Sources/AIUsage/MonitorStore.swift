@@ -86,7 +86,7 @@ final class MonitorStore: ObservableObject {
             self.providers[provider] = state
             if state.connected, let scope = state.scope, let snapshot = state.snapshot, snapshot != previous {
                 do { try UsageFiles.write(ScopedSnapshot(scope: scope, snapshot: snapshot), to: self.directory.appendingPathComponent("quota-\(provider.rawValue).json")) }
-                catch { self.settingsMessage = "Usage updated, but its private snapshot could not be saved."; self.settingsError = true }
+                catch { self.settingsMessage = "Usage updated. Couldn't save the reading."; self.settingsError = true }
             }
         }
     }
@@ -153,14 +153,14 @@ final class MonitorStore: ObservableObject {
         guard !preview else { return }
         do {
             try ClaudeIntegration(directory: directory).restore(); integrationInstalled = false
-            settingsMessage = "Your previous status line is restored. Restart older Claude Code sessions to stop capture."; settingsError = false
+            settingsMessage = "Status line restored. Restart older Claude Code sessions."; settingsError = false
         } catch { settingsMessage = error.localizedDescription; settingsError = true }
     }
     func forgetExperimentalConnection() {
         guard !preview else { return }
         do {
             try ExperimentalConnectionCleanup.forget()
-            settingsMessage = "The widget's experimental saved connection was removed. Agent sign-ins are unchanged."; settingsError = false
+            settingsMessage = "Old connection removed. Agents stay signed in."; settingsError = false
         } catch { settingsMessage = error.localizedDescription; settingsError = true }
     }
     func stop() { timer?.invalidate(); for monitor in monitors.values { monitor.cancel() } }
@@ -186,7 +186,7 @@ final class MonitorStore: ObservableObject {
     }
     func updateNotificationStatus() async {
         let status = await UNUserNotificationCenter.current().notificationSettings()
-        notificationStatus = status.authorizationStatus == .denied ? "Notifications are blocked. Allow AI Usage in System Settings → Notifications." : "Alerts at 80% and 95% used, once per usage window."
+        notificationStatus = status.authorizationStatus == .denied ? "Allow AI Usage in System Settings → Notifications." : "Alerts at 80% and 95% used."
     }
     private func evaluateAlerts() async {
         guard alertsEnabled, !preview, !evaluatingAlerts else { return }
@@ -201,7 +201,7 @@ final class MonitorStore: ObservableObject {
             for alert in ledger.candidates(for: snapshot, at: Date()) {
                 guard providers[provider]?.connected == true, providers[provider]?.scope == scope else { break }
                 let content = UNMutableNotificationContent()
-                content.title = "\(provider.title) allowance is running low"
+                content.title = "\(provider.title) allowance low"
                 content.body = "\(alert.window.title): \(Int(alert.window.remaining.rounded(.down)))% remaining."
                 content.sound = .default
                 do {
