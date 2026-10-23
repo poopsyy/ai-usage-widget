@@ -79,7 +79,7 @@ private struct ProviderCard: View {
                     Text(provider.title).font(.system(size: 14, weight: .semibold))
                     if provider == .claude {
                         Text("Experimental").font(.system(size: 9)).foregroundStyle(.secondary)
-                            .help("Requires Claude Code. Live support unverified.")
+                            .help("Reads Claude Code's /usage screen, so a Claude Code update can break it.")
                     }
                 }
                 Spacer()

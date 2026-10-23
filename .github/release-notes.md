@@ -14,7 +14,7 @@ curl -fsSL https://github.com/poopsyy/ai-usage-widget/releases/latest/download/i
 
 It verifies the download, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it before rerunning the installer to update.
 
-Provider tools are installed separately. Use signed-in Codex CLI and/or compatible Claude Code. Claude integration is experimental and has not passed live-account validation; the Claude desktop app alone is insufficient.
+Provider tools are installed separately. Use signed-in Codex CLI and/or compatible Claude Code. Claude support is experimental because it reads Claude Code's `/usage` screen; the Claude desktop app alone is not enough.
 
 ### Signing and limitations
 

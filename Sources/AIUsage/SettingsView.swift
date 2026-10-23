@@ -10,20 +10,22 @@ struct SettingsView: View {
             Section {
                 Toggle("Launch at login", isOn: Binding(get: { store.loginEnabled }, set: { store.setLogin($0) }))
                 Toggle("Low allowance alerts", isOn: Binding(get: { store.alertsEnabled }, set: { value in Task { await store.setAlerts(value) } }))
-                Text(store.notificationStatus).font(.caption).foregroundStyle(.secondary)
+                if !store.notificationStatus.isEmpty {
+                    Text(store.notificationStatus).font(.caption).foregroundStyle(.secondary)
+                }
             } header: { Text("General") }
 
             ForEach(ProviderID.allCases, id: \.self) { provider in
                 Section {
                     let state = store.providers[provider] ?? ProviderState()
                     Text(provider == .claude
-                         ? "Requires Claude Code. Experimental; live support unverified."
+                         ? "Uses your Claude Code login. Reads Claude Code's /usage screen, so a Claude Code update can break it."
                          : "Uses your Codex login.")
                         .font(.caption).foregroundStyle(.secondary)
                     Label(store.status(provider), systemImage: state.connected ? "checkmark.circle.fill" : "person.crop.circle")
                     if let error = state.error { Text(error).font(.caption).foregroundStyle(.secondary) }
                     HStack {
-                        TextField("Automatic path", text: provider == .claude ? $store.claudePath : $store.codexPath)
+                        TextField("Executable", text: provider == .claude ? $store.claudePath : $store.codexPath, prompt: Text("Found automatically"))
                             .textFieldStyle(.roundedBorder).onSubmit { store.savePath(provider) }
                             .accessibilityLabel("\(provider.title) executable path")
                             .help("Leave blank to find the agent automatically")
@@ -55,10 +57,8 @@ struct SettingsView: View {
             }
 
             Section {
-                Text("Accounts stay with your agents. Pause keeps you signed in.")
+                Text("Saved readings, alert history, and status-line backups. Sign-ins stay with Claude Code and Codex.")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Forget experimental connection") { store.forgetExperimentalConnection() }
-                    .help("Remove the widget's old saved connection. Agent sign-ins stay unchanged.")
                 Button("Open data folder") { store.openDataFolder() }
             } header: { Text("Local data") }
 

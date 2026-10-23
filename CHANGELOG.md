@@ -8,6 +8,8 @@
 
 ### Changed
 
+- Removed **Forget experimental connection**: it deleted a Keychain item that no released version created.
+- Settings and docs no longer describe Claude support as unverified; it has been checked against Claude Code 2.1.309.
 - Releases ship one universal app for Apple silicon and Intel. The installer and Homebrew cask use it, and the installer still installs per-architecture archives of older releases.
 
 ### Fixed

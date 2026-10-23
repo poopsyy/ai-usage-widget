@@ -12,7 +12,6 @@ struct CheckRunner {
             ("Claude reset labels", { try agents.testClaudeResetLabels() }),
             ("Account scopes and login URL restrictions", { agents.testScopesAndLoginURLs() }),
             ("Executable discovery", { try agents.testDiscovery() }),
-            ("Experimental connection cleanup is scoped and retryable", { try agents.testExperimentalCleanupIsScopedAndRetryable() }),
             ("Claude probe without a chat", { try await agents.testClaudeProbeWithoutChat() }),
             ("Claude status-line fast path", { try await agents.testClaudeStatusLineFastPath() }),
             ("Claude refresh preserves probe metadata", { try await agents.testClaudeRefreshPreservesProbeMetadata() }),

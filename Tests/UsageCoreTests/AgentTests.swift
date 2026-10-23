@@ -1,7 +1,6 @@
 import Darwin
 import Foundation
 import UsageCore
-import Security
 
 final class AgentTests {
     func testTerminalAndQuotaParsing() throws {
@@ -81,22 +80,6 @@ final class AgentTests {
         expectEqual(ExecutableLocator.find(.codex, environment: ["PATH": fixture.root.path], home: fixture.root)?.path, executable.path)
         expectNil(ExecutableLocator.find(.codex, override: fixture.root.appendingPathComponent("missing").path, environment: [:], home: fixture.root))
         expectNil(ExecutableLocator.find(.codex, override: fixture.root.path, environment: [:], home: fixture.root))
-    }
-    func testExperimentalCleanupIsScopedAndRetryable() throws {
-        var attempts = 0
-        do {
-            try ExperimentalConnectionCleanup.forget { query in
-                attempts += 1
-                expectEqual(query[kSecAttrService as String] as? String, "dev.local.ai-usage-widget.connections")
-                expectEqual(query[kSecAttrAccount as String] as? String, "claude.web.session.v1")
-                expectNil(query[kSecReturnData as String])
-                return errSecAuthFailed
-            }
-            fail("A failed removal must not report success")
-        } catch { expectTrue(error.localizedDescription.contains("could not be removed")) }
-        try ExperimentalConnectionCleanup.forget { _ in attempts += 1; return errSecSuccess }
-        try ExperimentalConnectionCleanup.forget { _ in attempts += 1; return errSecItemNotFound }
-        expectEqual(attempts, 3)
     }
     func testClaudeProbeWithoutChat() async throws {
         let fixture = try AgentFixture()

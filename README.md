@@ -10,7 +10,7 @@ A native macOS menu bar app that shows remaining Claude and Codex subscription a
 - Optional low-allowance notifications and launch at login.
 - Local storage with no app backend or analytics.
 
-AI Usage tracks subscription allowance, not API spending or estimated token consumption. Claude support is experimental and requires compatible **Claude Code**; the Claude desktop app alone is insufficient. Live Claude compatibility has not yet been verified.
+AI Usage tracks subscription allowance, not API spending or estimated token consumption. Claude support requires **Claude Code** (the Claude desktop app alone is not enough) and is experimental: it reads Claude Code's `/usage` screen, which a Claude Code update can change.
 
 ## Installation
 
@@ -63,7 +63,7 @@ Move the app to its final Applications folder before enabling launch at login.
 
 ### Removal
 
-If faster Claude updates are on, first turn them off in Settings and restart affected Claude Code sessions. Use **Forget experimental connection** if applicable. Disable launch at login, quit, and remove the app (or run `brew uninstall --cask poopsyy/tap/ai-usage`). Data and recovery backups remain separate; see [Privacy](PRIVACY.md) before removing them.
+If faster Claude updates are on, first turn them off in Settings and restart affected Claude Code sessions. Disable launch at login, quit, and remove the app (or run `brew uninstall --cask poopsyy/tap/ai-usage`). Data and recovery backups remain separate; see [Privacy](PRIVACY.md) before removing them.
 
 ## Tech stack
 

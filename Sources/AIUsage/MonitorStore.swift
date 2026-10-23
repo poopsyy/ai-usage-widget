@@ -177,13 +177,6 @@ final class MonitorStore: ObservableObject {
         configure(.claude)
         Task { [weak self] in await self?.monitors[.claude]?.refresh(force: true) }
     }
-    func forgetExperimentalConnection() {
-        guard !preview else { return }
-        do {
-            try ExperimentalConnectionCleanup.forget()
-            settingsMessage = "Old connection removed. Agents stay signed in."; settingsError = false
-        } catch { settingsMessage = error.localizedDescription; settingsError = true }
-    }
     func stop() { timer?.invalidate(); for monitor in monitors.values { monitor.cancel() } }
     func setLogin(_ enabled: Bool) {
         guard !preview else { return }
@@ -207,7 +200,8 @@ final class MonitorStore: ObservableObject {
     }
     func updateNotificationStatus() async {
         let status = await UNUserNotificationCenter.current().notificationSettings()
-        notificationStatus = status.authorizationStatus == .denied ? "Allow AI Usage in System Settings → Notifications." : "Alerts at 80% and 95% used."
+        if status.authorizationStatus == .denied { notificationStatus = "Allow AI Usage in System Settings → Notifications." }
+        else { notificationStatus = alertsEnabled ? "Alerts at 80% and 95% used." : "" }
     }
     /// Runs when a reading changes. A request during a run is queued, never dropped.
     private func evaluateAlerts() async {
