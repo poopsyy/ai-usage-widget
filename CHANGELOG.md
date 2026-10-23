@@ -7,6 +7,9 @@
 - Homebrew cask generation uses the current macOS minimum-version syntax.
 - Claude reset times are read from Claude Code's `/usage` labels, so Claude countdowns and low-allowance alerts work.
 - Low-allowance alerts no longer repeat when a reset time is reported with slightly different precision.
+- Claude checks replay terminal output incrementally instead of re-rendering the full transcript every 50 ms, greatly reducing CPU use.
+- Claude checks wait briefly for the weekly row instead of saving a partial reading, and no longer mistake tips that mention `/login` for a signed-out account.
+- Agent output written just before the process exits is no longer dropped.
 
 ## 0.1.0 - 2026-10-23
 

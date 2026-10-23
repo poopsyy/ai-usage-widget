@@ -98,34 +98,45 @@ public struct ClaudeCLIProvider: AgentClient {
                                displayName: "Claude account", profile: (root["configDirectory"] as? String) ?? environment["CLAUDE_CONFIG_DIR"] ?? "default")
     }
     private func probe(_ process: AgentProcess, directory: URL) throws -> UsageSnapshot {
-        var captured = Data(), commandSent = false, trustResponses = 0
+        var terminal = ClaudeCLIScreen()
+        var sawOutput = false, commandSent = false, trustResponses = 0
         var lastOutput = ProcessInfo.processInfo.systemUptime
         var ready = lastOutput + 1
         var previousScreen = ""
         var queryTail = Data()
+        // Derived from the screen only when new output arrives; the loop otherwise just waits.
+        var screen = "", lower = "", lines: [String] = [], promptReady = false, parsed: UsageSnapshot?
+        func update() {
+            screen = terminal.text
+            lower = screen.lowercased()
+            lines = screen.components(separatedBy: "\n")
+            let lastMarker = lines.lastIndex(where: { $0.contains("❯") })
+            promptReady = lastMarker.map { index in
+                let line = lines[index].trimmingCharacters(in: .whitespaces)
+                return line == "❯" || line.hasPrefix("❯ Try ")
+            } ?? lines.contains(where: { $0.trimmingCharacters(in: .whitespaces) == ">" })
+            parsed = commandSent ? try? ClaudeCLIUsage.snapshot(screen: screen) : nil
+        }
+        update()
         while true {
             let chunk: Data
             do { chunk = try process.readChunk() }
             catch let problem as AgentError {
-                if problem == .timeout(.claude), !commandSent, !captured.isEmpty { throw AgentError.claudeProbeSetup(.startupPrompt) }
+                if problem == .timeout(.claude), !commandSent, sawOutput { throw AgentError.claudeProbeSetup(.startupPrompt) }
                 throw problem
             }
-            if !chunk.isEmpty { captured.append(chunk); lastOutput = ProcessInfo.processInfo.systemUptime }
-            queryTail.append(chunk)
-            let query = Data([0x1b, 0x5b, 0x36, 0x6e])
-            while let range = queryTail.range(of: query) {
-                try process.send("\u{1b}[1;1R")
-                queryTail.removeSubrange(..<range.upperBound)
+            if !chunk.isEmpty {
+                sawOutput = true; lastOutput = ProcessInfo.processInfo.systemUptime
+                queryTail.append(chunk)
+                let query = Data([0x1b, 0x5b, 0x36, 0x6e])
+                while let range = queryTail.range(of: query) {
+                    try process.send("\u{1b}[1;1R")
+                    queryTail.removeSubrange(..<range.upperBound)
+                }
+                queryTail = Data(queryTail.suffix(3))
+                terminal.feed(chunk)
+                update()
             }
-            queryTail = Data(queryTail.suffix(3))
-            let screen = ClaudeCLIScreen.render(String(decoding: captured, as: UTF8.self))
-            let lower = screen.lowercased()
-            let lines = screen.components(separatedBy: "\n")
-            let lastMarker = lines.lastIndex(where: { $0.contains("❯") })
-            let promptReady = lastMarker.map { index in
-                let line = lines[index].trimmingCharacters(in: .whitespaces)
-                return line == "❯" || line.hasPrefix("❯ Try ")
-            } ?? lines.contains(where: { $0.trimmingCharacters(in: .whitespaces) == ">" })
             let trustPending = !commandSent && !promptReady && lower.contains("yes, i trust this folder")
             if screen != previousScreen {
                 previousScreen = screen
@@ -141,16 +152,22 @@ public struct ClaudeCLIProvider: AgentClient {
                 }
             }
             if trustPending { if process.hasExited { throw AgentError.unavailable(.claude) }; continue }
-            if lower.contains("sign in") || lower.contains("not logged in") || lower.contains("/login") { throw AgentError.signedOut(.claude) }
+            // `auth status` already confirmed sign-in; only a startup screen may contradict it, never tips or menus later.
+            if !commandSent, !promptReady, lower.contains("sign in") || lower.contains("not logged in") || lower.contains("/login") { throw AgentError.signedOut(.claude) }
             if lower.contains("rate limited") || lower.contains("too many requests") { throw AgentError.rateLimited(nil) }
             if lower.contains("choose the text style") || lower.contains("select login method") || (!promptReady && lower.contains("do you trust")) || lower.contains("permission required") { throw AgentError.claudeProbeSetup(.startupPrompt) }
             let idle = ProcessInfo.processInfo.systemUptime - lastOutput
             if !commandSent, promptReady, ProcessInfo.processInfo.systemUptime >= ready, idle >= 0.3 {
                 // Only a recognized empty Claude prompt may receive the built-in command.
                 // A quiet startup banner is not a setup failure: wait for the actual prompt.
-                try process.send("/usage\r"); commandSent = true; captured.removeAll(); continue
+                try process.send("/usage\r"); commandSent = true
+                terminal = ClaudeCLIScreen(); update(); continue
             }
-            if commandSent, idle >= 0.5, let snapshot = try? ClaudeCLIUsage.snapshot(screen: screen) { return snapshot }
+            if commandSent, idle >= 0.5, let snapshot = parsed {
+                // A screen still loading its weekly row gets extra time before a partial reading is accepted.
+                let ids = Set(snapshot.windows.map(\.id))
+                if (ids.contains("five_hour") && ids.contains("seven_day")) || idle >= 2 { return snapshot }
+            }
             if commandSent, idle >= 1, lower.contains("subscription") && (lower.contains("only available") || lower.contains("not available")) { throw AgentError.unsupported(.claude) }
             if process.hasExited { throw AgentError.unavailable(.claude) }
         }

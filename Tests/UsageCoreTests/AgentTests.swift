@@ -26,6 +26,21 @@ final class AgentTests {
         let expired = try ClaudeCLIUsage.snapshot(screen: "Current session\n90% used\nResets 2020-01-01T00:00:00Z", at: now)
         expectTrue(expired.windows[0].isExpired(at: now)); expectNil(expired.remaining(at: now))
     }
+    func testIncrementalScreenMatchesFullReplay() {
+        let raw = "\u{1b}]0;title\u{7}❯ Try\r\n\u{1b}[2K\u{1b}[1ACurrent session ✻\r\n\u{1b}[38;5;12m42% used\u{1b}[0m\r\n" + String(repeating: "scroll ✓\r\n", count: 260) + "\u{1b}[2J\u{1b}[HResets 3pm (UTC)"
+        let expected = ClaudeCLIScreen.render(raw)
+        let bytes = Data(raw.utf8)
+        // Every split point, including inside escape sequences and multibyte characters.
+        for split in stride(from: 1, to: bytes.count, by: 7) {
+            var screen = ClaudeCLIScreen()
+            screen.feed(bytes.prefix(split)); screen.feed(bytes.dropFirst(split))
+            if screen.text != expected { fail("Split at byte \(split) changed the screen"); return }
+        }
+        var byteWise = ClaudeCLIScreen()
+        for byte in bytes { byteWise.feed(Data([byte])) }
+        expectEqual(byteWise.text, expected)
+        expectTrue(expected.hasPrefix("Resets 3pm (UTC)"))
+    }
     func testClaudeResetLabels() throws {
         // 2027-01-15 08:00:00 UTC
         let now = Date(timeIntervalSince1970: 1_800_000_000)

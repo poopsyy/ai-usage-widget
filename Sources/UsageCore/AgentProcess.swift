@@ -31,6 +31,7 @@ final class AgentProcess: @unchecked Sendable {
     private var totalBytes = 0
     private(set) var exitCode: Int32?
     private var pending = Data()
+    private var buffer = [UInt8](repeating: 0, count: 16384)
     private var stopped = false
 
     init(executable: URL, arguments: [String], provider: ProviderID, directory: URL, environment: [String: String], terminal: Bool = false, timeout: TimeInterval = 30, cancellation: AgentCancellation) throws {
@@ -105,18 +106,20 @@ final class AgentProcess: @unchecked Sendable {
         try check()
         var descriptor = pollfd(fd: readFD, events: Int16(POLLIN), revents: 0)
         poll(&descriptor, 1, 50)
-        var bytes = [UInt8](repeating: 0, count: 16384)
-        let count = Darwin.read(readFD, &bytes, bytes.count)
+        var count = Darwin.read(readFD, &buffer, buffer.count)
+        var failure = count < 0 ? errno : 0
+        if count <= 0, !exited {
+            observeExit()
+            // Output written just before exiting can land between the empty read and the exit check.
+            if exited { count = Darwin.read(readFD, &buffer, buffer.count); failure = count < 0 ? errno : 0 }
+        }
         if count > 0 {
             totalBytes += count
             guard totalBytes <= 2_000_000 else { throw AgentError.invalidResponse(provider) }
-            return Data(bytes.prefix(count))
+            return Data(buffer[0..<count])
         }
-        if !exited {
-            observeExit()
-        }
-        if exited, count <= 0 { return Data() }
-        if count < 0, errno != EAGAIN, errno != EINTR, errno != EIO { throw AgentError.unavailable(provider) }
+        if exited { return Data() }
+        if count < 0, failure != EAGAIN, failure != EINTR, failure != EIO { throw AgentError.unavailable(provider) }
         return Data()
     }
     var hasExited: Bool { exited }

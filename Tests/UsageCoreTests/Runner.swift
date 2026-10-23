@@ -8,6 +8,7 @@ struct CheckRunner {
         let agents = AgentTests()
         let checks: [(String, () async throws -> Void)] = [
             ("Terminal replay and Claude quota parsing", { try agents.testTerminalAndQuotaParsing() }),
+            ("Incremental terminal replay", { agents.testIncrementalScreenMatchesFullReplay() }),
             ("Claude reset labels", { try agents.testClaudeResetLabels() }),
             ("Account scopes and login URL restrictions", { agents.testScopesAndLoginURLs() }),
             ("Executable discovery", { try agents.testDiscovery() }),

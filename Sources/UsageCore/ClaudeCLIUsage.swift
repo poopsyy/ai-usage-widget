@@ -1,61 +1,87 @@
 import Foundation
 
 /// Replays a bounded terminal screen instead of matching erased quota text in a transcript.
-public enum ClaudeCLIScreen {
+/// Output is fed incrementally, so each chunk costs only its own length.
+public struct ClaudeCLIScreen {
+    public let rows: Int
+    public let columns: Int
+    private var cells: [[Character]]
+    private var top = 0 // Ring-buffer index of the first visible row.
+    private var row = 0, column = 0, savedRow = 0, savedColumn = 0
+    private var carry: [Character] = [] // An escape sequence split across chunks.
+    private var undecoded = Data() // A UTF-8 character split across chunks.
+
+    public init(rows: Int = 200, columns: Int = 160) {
+        self.rows = rows; self.columns = columns
+        cells = Array(repeating: Array(repeating: " ", count: columns), count: rows)
+    }
     public static func render(_ text: String, rows: Int = 200, columns: Int = 160) -> String {
-        var cells = Array(repeating: Array(repeating: Character(" "), count: columns), count: rows)
-        var row = 0, column = 0, savedRow = 0, savedColumn = 0
-        let chars = Array(text)
-        var index = 0
-        func clamp(_ value: Int, _ maximum: Int) -> Int { max(0, min(maximum - 1, value)) }
-        func newline() {
-            row += 1
-            if row >= rows { cells.removeFirst(); cells.append(Array(repeating: " ", count: columns)); row = rows - 1 }
+        var screen = ClaudeCLIScreen(rows: rows, columns: columns)
+        screen.feed(text)
+        return screen.text
+    }
+    public var text: String {
+        (0..<rows).map { String(cells[(top + $0) % rows]).trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+    }
+    private func clamp(_ value: Int, _ maximum: Int) -> Int { max(0, min(maximum - 1, value)) }
+    private mutating func clear(_ visibleRow: Int, _ range: Range<Int>) {
+        let physical = (top + visibleRow) % rows
+        for c in range { cells[physical][c] = " " }
+    }
+    private mutating func newline() {
+        row += 1
+        if row >= rows { clear(0, 0..<columns); top = (top + 1) % rows; row = rows - 1 }
+    }
+    /// Feeds raw terminal bytes; a split trailing UTF-8 character waits for the next chunk.
+    public mutating func feed(_ data: Data) {
+        undecoded.append(data)
+        let complete = Self.completeUTF8Length(undecoded)
+        feed(String(decoding: undecoded.prefix(complete), as: UTF8.self))
+        undecoded = Data(undecoded.dropFirst(complete))
+    }
+    private static func completeUTF8Length(_ data: Data) -> Int {
+        let bytes = [UInt8](data.suffix(4))
+        for back in stride(from: 1, through: bytes.count, by: 1) {
+            let byte = bytes[bytes.count - back]
+            guard byte & 0xC0 == 0x80 else {
+                let length = byte < 0x80 ? 1 : byte >> 5 == 0b110 ? 2 : byte >> 4 == 0b1110 ? 3 : byte >> 3 == 0b11110 ? 4 : 1
+                return length > back ? data.count - back : data.count
+            }
         }
+        return data.count
+    }
+    public mutating func feed(_ text: String) {
+        let chars = carry + Array(text)
+        carry = []
+        var index = 0
         while index < chars.count {
+            let start = index
             let char = chars[index]; index += 1
             if char == "\u{1b}" {
-                guard index < chars.count else { break }
+                guard index < chars.count else { keep(chars[start...]); return }
                 let kind = chars[index]; index += 1
                 if kind == "[" {
-                    var parameter = ""
+                    var parameter = "", finished = false
                     while index < chars.count {
                         let value = chars[index]; index += 1
                         if let scalar = value.asciiValue, (0x40...0x7e).contains(scalar) {
-                            let values = parameter.split(separator: ";", omittingEmptySubsequences: false).map { Int($0) ?? 0 }
-                            let first = values.first ?? 0; let amount = max(1, first)
-                            switch value {
-                            case "A": row = clamp(row - amount, rows)
-                            case "B": row = clamp(row + amount, rows)
-                            case "C": column = clamp(column + amount, columns)
-                            case "D": column = clamp(column - amount, columns)
-                            case "G": column = clamp(amount - 1, columns)
-                            case "d": row = clamp(amount - 1, rows)
-                            case "H", "f": row = clamp(amount - 1, rows); column = clamp((values.count > 1 ? max(1, values[1]) : 1) - 1, columns)
-                            case "J":
-                                if first == 2 || first == 3 { cells = Array(repeating: Array(repeating: " ", count: columns), count: rows) }
-                                else if first == 0 {
-                                    for r in row..<rows { for c in (r == row ? column : 0)..<columns { cells[r][c] = " " } }
-                                } else if first == 1 {
-                                    for r in 0...row { for c in 0..<(r == row ? min(columns, column + 1) : columns) { cells[r][c] = " " } }
-                                }
-                            case "K":
-                                let range = first == 2 ? 0..<columns : (first == 1 ? 0..<min(columns, column + 1) : min(column, columns)..<columns)
-                                for c in range { cells[row][c] = " " }
-                            case "s": savedRow = row; savedColumn = column
-                            case "u": row = savedRow; column = savedColumn
-                            default: break // SGR, cursor visibility, queries, and private modes do not write text.
-                            }
+                            csi(value, parameter); finished = true
                             break
                         }
                         parameter.append(value)
                     }
+                    if !finished { keep(chars[start...]); return }
                 } else if kind == "]" || kind == "P" {
+                    var finished = false
                     while index < chars.count {
-                        if chars[index] == "\u{7}" { index += 1; break }
-                        if chars[index] == "\u{1b}", index + 1 < chars.count, chars[index + 1] == "\\" { index += 2; break }
+                        if chars[index] == "\u{7}" { index += 1; finished = true; break }
+                        if chars[index] == "\u{1b}" {
+                            guard index + 1 < chars.count else { break }
+                            if chars[index + 1] == "\\" { index += 2; finished = true; break }
+                        }
                         index += 1
                     }
+                    if !finished { keep(chars[start...]); return }
                 } else if kind == "7" { savedRow = row; savedColumn = column }
                 else if kind == "8" { row = savedRow; column = savedColumn }
                 continue
@@ -69,10 +95,38 @@ public enum ClaudeCLIScreen {
             default:
                 guard char.unicodeScalars.allSatisfy({ $0.value >= 32 && $0.value != 127 }) else { continue }
                 if column >= columns { column = 0; newline() }
-                cells[row][column] = char; column += 1
+                cells[(top + row) % rows][column] = char; column += 1
             }
         }
-        return cells.map { String($0).trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+    }
+    private mutating func keep(_ rest: ArraySlice<Character>) {
+        // An unterminated control string is bounded so it cannot grow without limit.
+        carry = rest.count <= 4096 ? Array(rest) : []
+    }
+    private mutating func csi(_ final: Character, _ parameter: String) {
+        let values = parameter.split(separator: ";", omittingEmptySubsequences: false).map { Int($0) ?? 0 }
+        let first = values.first ?? 0; let amount = max(1, first)
+        switch final {
+        case "A": row = clamp(row - amount, rows)
+        case "B": row = clamp(row + amount, rows)
+        case "C": column = clamp(column + amount, columns)
+        case "D": column = clamp(column - amount, columns)
+        case "G": column = clamp(amount - 1, columns)
+        case "d": row = clamp(amount - 1, rows)
+        case "H", "f": row = clamp(amount - 1, rows); column = clamp((values.count > 1 ? max(1, values[1]) : 1) - 1, columns)
+        case "J":
+            if first == 2 || first == 3 { for r in 0..<rows { clear(r, 0..<columns) } }
+            else if first == 0 {
+                for r in row..<rows { clear(r, (r == row ? column : 0)..<columns) }
+            } else if first == 1 {
+                for r in 0...row { clear(r, 0..<(r == row ? min(columns, column + 1) : columns)) }
+            }
+        case "K":
+            clear(row, first == 2 ? 0..<columns : (first == 1 ? 0..<min(columns, column + 1) : min(column, columns)..<columns))
+        case "s": savedRow = row; savedColumn = column
+        case "u": row = savedRow; column = savedColumn
+        default: break // SGR, cursor visibility, queries, and private modes do not write text.
+        }
     }
 }
 
