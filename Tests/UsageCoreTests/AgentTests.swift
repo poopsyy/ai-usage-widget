@@ -52,6 +52,10 @@ final class AgentTests {
         expectEqual(try reset("Resets 7am (UTC)"), Date(timeIntervalSince1970: 1_800_082_800))
         expectEqual(try reset("Resets Jan 22, 9am (UTC)"), Date(timeIntervalSince1970: 1_800_608_400))
         expectEqual(try reset("Resets Jan 2, 2028, 9am (UTC)"), Date(timeIntervalSince1970: 1_830_416_400))
+        // Claude Code 2.1.309 output.
+        expectEqual(try reset("Resets Jan 22 at 9am (UTC)"), Date(timeIntervalSince1970: 1_800_608_400))
+        expectEqual(try reset("Resets Jan 22 at 4:00pm (Asia/Jakarta)"), Date(timeIntervalSince1970: 1_800_608_400))
+        expectEqual(try reset("Resets Jan 2, 2028 at 9am (UTC)"), Date(timeIntervalSince1970: 1_830_416_400))
         expectEqual(try reset("Resets Jan 2, 9am (UTC)", at: Date(timeIntervalSince1970: 1_798_632_000)), Date(timeIntervalSince1970: 1_798_880_400))
         expectTrue(try reset("Resets 3pm (Not/AZone)") != nil)
         expectNil(try reset("Resets Oct 30 (UTC)"))

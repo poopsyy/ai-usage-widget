@@ -177,7 +177,7 @@ public enum ClaudeCLIUsage {
     private static let relativePattern = regex(#"resets?\s+in\s+(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?\s*$"#)
     private static let labelPattern = regex(#"resets\s+(.+?)(?:\s+\(([A-Za-z_]+(?:/[A-Za-z0-9_+\-]+)*)\))?\s*$"#)
     private static let timePattern = regex(#"^(\d{1,2})(?::(\d\d))?(am|pm)$"#)
-    private static let datePattern = regex(#"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec) (\d{1,2})(?:, (\d{4}))?, (\d{1,2})(?::(\d\d))?(am|pm)$"#)
+    private static let datePattern = regex(#"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec) (\d{1,2})(?:, (\d{4}))?(?:,| at) (\d{1,2})(?::(\d\d))?(am|pm)$"#)
     private static let months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
     private static let fractionalISO: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return formatter
@@ -200,7 +200,8 @@ public enum ClaudeCLIUsage {
             let seconds = hours * 3600 + minutes * 60 + (Double(groups[2]) ?? 0)
             if seconds > 0 { return now.addingTimeInterval(seconds) }
         }
-        // Claude Code labels: "3pm (Zone)" within a day, "Oct 30, 9am (Zone)" or "Jan 2, 2027, 9am (Zone)" otherwise.
+        // Claude Code labels: "3pm (Zone)" within a day, otherwise "Oct 30 at 9am (Zone)" or "Jan 2, 2027 at 9am (Zone)"
+        // (older ICU versions use ", " instead of " at ").
         // Date-only and weekday labels stay unknown.
         guard let groups = match(labelPattern, text) else { return nil }
         var calendar = Calendar(identifier: .gregorian)
