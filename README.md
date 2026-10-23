@@ -26,7 +26,7 @@ brew trust --cask poopsyy/ai-usage-widget/ai-usage
 brew install --cask ai-usage
 ```
 
-Open **AI Usage** from Applications. Quit it before updating with `brew update` followed by `brew upgrade --cask ai-usage`. If you installed from the retired `poopsyy/tap`, run `brew uninstall --cask ai-usage && brew untap poopsyy/tap` first.
+Open **AI Usage** from Applications. Quit it before updating with `brew update` followed by `brew upgrade --cask ai-usage`. If you installed from the retired `poopsyy/tap`, run `brew uninstall --cask poopsyy/tap/ai-usage && brew untap poopsyy/tap` first.
 
 ### Terminal installer
 
@@ -67,7 +67,7 @@ Move the app to its final Applications folder before enabling launch at login.
 
 ### Removal
 
-If faster Claude updates are on, first turn them off in Settings and restart affected Claude Code sessions. Disable launch at login, quit, and remove the app (or run `brew uninstall --cask poopsyy/tap/ai-usage`). Data and recovery backups remain separate; see [Privacy](PRIVACY.md) before removing them.
+If faster Claude updates are on, first turn them off in Settings and restart affected Claude Code sessions. Disable launch at login, quit, and remove the app (or run `brew uninstall --cask ai-usage`). Data and recovery backups remain separate; see [Privacy](PRIVACY.md) before removing them.
 
 ## Tech stack
 
