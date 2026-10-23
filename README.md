@@ -18,10 +18,11 @@ Requires **macOS 14+** on Apple silicon or Intel. Install and sign in to [Codex 
 
 ### Homebrew
 
-This repository is its own Homebrew tap:
+This repository is its own Homebrew tap. Homebrew requires trusting casks from taps outside its official ones:
 
 ```sh
 brew tap poopsyy/ai-usage-widget https://github.com/poopsyy/ai-usage-widget
+brew trust --cask poopsyy/ai-usage-widget/ai-usage
 brew install --cask ai-usage
 ```
 

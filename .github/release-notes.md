@@ -16,6 +16,7 @@ Or with Homebrew (the cask updates shortly after publishing):
 
 ```sh
 brew tap poopsyy/ai-usage-widget https://github.com/poopsyy/ai-usage-widget
+brew trust --cask poopsyy/ai-usage-widget/ai-usage
 brew install --cask ai-usage
 ```
 
