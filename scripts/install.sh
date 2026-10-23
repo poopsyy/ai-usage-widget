@@ -47,7 +47,9 @@ destination="$app_dir/AI Usage.app"
 [[ ! -L "$destination" ]] || fail 'Destination is a symlink; remove it manually first.'
 if [[ -e "$destination" ]]; then
   existing_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$destination/Contents/Info.plist" 2>/dev/null || true)"
-  [[ "$existing_id" == dev.local.ai-usage-widget ]] || fail 'Destination is not a recognized AI Usage app.'
+  # 0.1.0 used a placeholder bundle ID.
+  [[ "$existing_id" == io.github.poopsyy.ai-usage || "$existing_id" == dev.local.ai-usage-widget ]] \
+    || fail 'Destination is not a recognized AI Usage app.'
 fi
 staging="$(mktemp -d "$app_dir/.ai-usage-install.XXXXXX")"
 cleanup() {
@@ -80,7 +82,8 @@ app="$staging/extracted/AI Usage.app"
 [[ -d "$app" && ! -L "$app" ]] || fail 'Archive is missing AI Usage.app.'
 bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")"
 bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
-[[ "$bundle_id" == dev.local.ai-usage-widget && "$bundle_version" == "$version" ]] \
+[[ ( "$bundle_id" == io.github.poopsyy.ai-usage || ( "$version" == 0.1.0 && "$bundle_id" == dev.local.ai-usage-widget ) ) \
+   && "$bundle_version" == "$version" ]] \
   || fail 'Downloaded app identity or version does not match the release.'
 codesign --verify --deep --strict "$app"
 # Check again in case the user launched the app while the download was running.

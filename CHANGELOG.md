@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-24
+
 ### Added
 
 - Optional **Faster updates during Claude Code sessions**: uses the usage Claude Code reports to its status line, with exact reset times, and falls back to the `/usage` check otherwise. It replaces **Restore previous status line**; turning it off restores your previous status line.
@@ -10,6 +12,8 @@
 
 - Removed **Forget experimental connection**: it deleted a Keychain item that no released version created.
 - Settings and docs no longer describe Claude support as unverified; it has been checked against Claude Code 2.1.309.
+- The bundle ID is now `io.github.poopsyy.ai-usage` instead of the placeholder `dev.local.ai-usage-widget`. Executable paths and pause states carry over; macOS asks for notification permission again if alerts were on, and launch at login must be turned on again.
+- Homebrew installs from this repository (`brew tap poopsyy/ai-usage-widget https://github.com/poopsyy/ai-usage-widget`); the separate `poopsyy/tap` is retired.
 - Releases ship one universal app for Apple silicon and Intel. The installer and Homebrew cask use it, and the installer still installs per-architecture archives of older releases.
 
 ### Fixed

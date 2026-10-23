@@ -4,9 +4,9 @@
 <dict>
     <key>CFBundleName</key><string>AI Usage</string>
     <key>CFBundleDisplayName</key><string>AI Usage</string>
-    <key>CFBundleIdentifier</key><string>dev.local.ai-usage-widget</string>
-    <key>CFBundleVersion</key><string>1</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleIdentifier</key><string>io.github.poopsyy.ai-usage</string>
+    <key>CFBundleVersion</key><string>0.2.0</string>
+    <key>CFBundleShortVersionString</key><string>0.2.0</string>
     <key>CFBundleExecutable</key><string>AIUsage</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>

@@ -18,11 +18,14 @@ Requires **macOS 14+** on Apple silicon or Intel. Install and sign in to [Codex 
 
 ### Homebrew
 
+This repository is its own Homebrew tap:
+
 ```sh
-brew install --cask poopsyy/tap/ai-usage
+brew tap poopsyy/ai-usage-widget https://github.com/poopsyy/ai-usage-widget
+brew install --cask ai-usage
 ```
 
-Open **AI Usage** from Applications. Quit it before updating with `brew update` followed by `brew upgrade --cask poopsyy/tap/ai-usage`.
+Open **AI Usage** from Applications. Quit it before updating with `brew update` followed by `brew upgrade --cask ai-usage`. If you installed from the retired `poopsyy/tap`, run `brew uninstall --cask ai-usage && brew untap poopsyy/tap` first.
 
 ### Terminal installer
 

@@ -38,4 +38,4 @@ Cached snapshots are loaded only after the official agent reports a matching acc
 
 Pausing stops the widget's provider checks and alerts, hides its reading, and leaves the official agent signed in. Nothing is uploaded to a project-operated server. Notification text contains provider name and remaining allowance and may appear on screen under macOS settings.
 
-For removal, turn off faster Claude updates (restoring your previous status line), restart older Claude Code sessions, disable launch at login, and quit. Then delete the app/data folder and optionally its `dev.local.ai-usage-widget` preferences. Removing the widget does not remove provider tools or sign them out. See [removal instructions](README.md#removal).
+For removal, turn off faster Claude updates (restoring your previous status line), restart older Claude Code sessions, disable launch at login, and quit. Then delete the app/data folder and optionally its `io.github.poopsyy.ai-usage` preferences (and `dev.local.ai-usage-widget` from 0.1.0). Removing the widget does not remove provider tools or sign them out. See [removal instructions](README.md#removal).

@@ -49,7 +49,8 @@ final class MonitorStore: ObservableObject {
             return
         }
         let preferences = UserDefaults.standard
-        alertsEnabled = preferences.bool(forKey: "alertsEnabled")
+        let reenableAlerts = Self.migrateLegacyPreferences(into: preferences)
+        alertsEnabled = preferences.bool(forKey: "alertsEnabled") && !reenableAlerts
         loginEnabled = SMAppService.mainApp.status == .enabled
         codexPath = preferences.string(forKey: "codexPath") ?? ""
         claudePath = preferences.string(forKey: "claudePath") ?? ""
@@ -65,7 +66,22 @@ final class MonitorStore: ObservableObject {
         stopObserver = NotificationCenter.default.addObserver(forName: .agentMonitoringWillStop, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.stop() }
         }
-        Task { [weak self] in await self?.refresh(); await self?.updateNotificationStatus() }
+        Task { [weak self] in
+            // Notification permission belongs to the old bundle ID, so ask once for the new one.
+            if reenableAlerts { await self?.setAlerts(true) }
+            await self?.refresh(); await self?.updateNotificationStatus()
+        }
+    }
+    /// 0.1.0 used the placeholder bundle ID `dev.local.ai-usage-widget`; carry its settings over once.
+    /// Returns whether alerts were on, since their permission must be requested again.
+    private static func migrateLegacyPreferences(into preferences: UserDefaults) -> Bool {
+        guard !preferences.bool(forKey: "migratedLegacyPreferences"),
+              let legacy = UserDefaults(suiteName: "dev.local.ai-usage-widget") else { return false }
+        preferences.set(true, forKey: "migratedLegacyPreferences")
+        for key in ["codexPath", "claudePath", "paused.claude", "paused.codex"] where preferences.object(forKey: key) == nil {
+            if let value = legacy.object(forKey: key) { preferences.set(value, forKey: key) }
+        }
+        return preferences.object(forKey: "alertsEnabled") == nil && legacy.bool(forKey: "alertsEnabled")
     }
     deinit {
         timer?.invalidate()

@@ -4,6 +4,7 @@ import importlib.util
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -49,7 +50,7 @@ fi
             name = f"AI-Usage-{version}-macos-{flavor}.zip"
             with zipfile.ZipFile(self.assets / name, "w") as archive:
                 archive.writestr("AI Usage.app/Contents/Info.plist", plistlib.dumps({
-                    "CFBundleIdentifier": "dev.local.ai-usage-widget",
+                    "CFBundleIdentifier": "dev.local.ai-usage-widget" if version == "0.1.0" else "io.github.poopsyy.ai-usage",
                     "CFBundleShortVersionString": version,
                 }))
                 archive.writestr("AI Usage.app/Contents/Resources/architecture", flavor)
@@ -125,6 +126,24 @@ fi
         self.previous_app()
         self.run_install()
         self.assertFalse((self.app / "previous").exists())
+
+    def test_both_bundle_ids_are_recognized(self):
+        for bundle_id in ("io.github.poopsyy.ai-usage", "dev.local.ai-usage-widget"):
+            with self.subTest(bundle_id=bundle_id):
+                self.previous_app(bundle_id)
+                self.run_install()
+                self.assertFalse((self.app / "previous").exists())
+                shutil.rmtree(self.app)
+
+    def test_new_release_with_old_bundle_id_rejected(self):
+        name = "AI-Usage-0.2.0-macos-universal.zip"
+        with zipfile.ZipFile(self.assets / name, "w") as archive:
+            archive.writestr("AI Usage.app/Contents/Info.plist", plistlib.dumps({
+                "CFBundleIdentifier": "dev.local.ai-usage-widget", "CFBundleShortVersionString": "0.2.0"}))
+        digest = hashlib.sha256((self.assets / name).read_bytes()).hexdigest()
+        (self.assets / f"{name}.sha256").write_text(f"{digest}  {name}\n")
+        self.run_install(success=False)
+        self.assertFalse(self.app.exists())
 
     def test_failed_move_restores_previous_app(self):
         self.previous_app()

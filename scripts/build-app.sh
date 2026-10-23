@@ -38,6 +38,8 @@ else
   cp "$bin_dir/UsageBridge" "$app/Contents/Helpers/UsageBridge"
 fi
 cp "$root/Resources/Info.plist" "$app/Contents/Info.plist"
+# The build number always equals the marketing version, so it increases with every release.
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$root/Resources/Info.plist")" "$app/Contents/Info.plist"
 cp "$root/LICENSE" "$app/Contents/Resources/LICENSE"
 cp -R "$bin_dir/AIUsage_AIUsage.bundle" "$app/Contents/Resources/"
 swift "$root/scripts/make-icon.swift" "$root/.build/AppIcon.iconset"
