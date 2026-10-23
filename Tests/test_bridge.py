@@ -44,6 +44,14 @@ class BridgeTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", raw)
         self.assertEqual(result.stderr, b"")
 
+    def test_session_title_and_sonnet_window(self):
+        payload = json.loads(self.payload())
+        payload["rate_limits"]["seven_day_sonnet"] = {"used_percentage": 7, "resets_at": 1900600000}
+        result = self.run_bridge(json.dumps(payload).encode())
+        self.assertIn(b"Session: 42% used", result.stdout)
+        windows = json.loads((self.directory / "claude.json").read_text())["windows"]
+        self.assertEqual([w["id"] for w in windows], ["five_hour", "seven_day", "seven_day_sonnet"])
+
     def test_absent_or_malformed_data_retains_last_snapshot(self):
         self.run_bridge(self.payload())
         before = (self.directory / "claude.json").read_bytes()

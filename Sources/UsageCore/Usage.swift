@@ -61,7 +61,7 @@ public enum UsageParser {
     public static func claude(_ data: Data, at now: Date = Date()) throws -> UsageSnapshot {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let limits = root["rate_limits"] as? [String: Any] else { throw UsageError.invalidData }
-        let windows = [("five_hour", "5 hours"), ("seven_day", "Weekly")].compactMap { id, title -> UsageWindow? in
+        let windows = [("five_hour", "Session"), ("seven_day", "Weekly"), ("seven_day_sonnet", "Weekly · Sonnet")].compactMap { id, title -> UsageWindow? in
             guard let raw = limits[id] as? [String: Any] else { return nil }
             return window(id: id, title: title, raw: raw, percentKey: "used_percentage", resetKey: "resets_at")
         }

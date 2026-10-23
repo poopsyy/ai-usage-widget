@@ -18,6 +18,7 @@ public struct ClaudeIntegration {
         self.settingsURL = settingsURL ?? config.appendingPathComponent("settings.json")
     }
     public var stateURL: URL { directory.appendingPathComponent("claude-integration.json") }
+    public var helperURL: URL { directory.appendingPathComponent("claude-statusline") }
     public var isInstalled: Bool {
         guard let state = try? UsageFiles.read(IntegrationState.self, from: stateURL),
               let data = try? Data(contentsOf: state.settingsURL),
@@ -43,7 +44,7 @@ public struct ClaudeIntegration {
                 throw UsageError.setup("The existing Claude status line has an unsupported format. No settings were changed.")
             }
         }
-        let destination = directory.appendingPathComponent("claude-statusline")
+        let destination = helperURL
         let previous = try root["statusLine"].map { try JSONSerialization.data(withJSONObject: $0, options: [.fragmentsAllowed]) }
         let command = Self.shellQuote(destination.path) + " --directory " + Self.shellQuote(directory.path)
         let backup = directory.appendingPathComponent("claude-settings-backup-\(UUID().uuidString).json")
@@ -67,6 +68,14 @@ public struct ClaudeIntegration {
             try? FileManager.default.removeItem(at: stateURL)
             throw error
         }
+    }
+    /// Running sessions call the copied helper, so an app update must replace the copy too.
+    public func refreshHelper(from helper: URL) throws {
+        guard isInstalled else { return }
+        let bundled = try Data(contentsOf: helper)
+        guard (try? Data(contentsOf: helperURL)) != bundled else { return }
+        try bundled.write(to: helperURL, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: helperURL.path)
     }
     public func restore() throws {
         guard let state = try? UsageFiles.read(IntegrationState.self, from: stateURL) else { return }

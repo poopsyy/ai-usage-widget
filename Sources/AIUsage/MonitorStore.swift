@@ -18,7 +18,7 @@ final class MonitorStore: ObservableObject {
     @Published var now = Date()
     @Published var alertsEnabled = false
     @Published var notificationStatus = ""
-    @Published var integrationInstalled = false
+    @Published var statusLineEnabled = false
     @Published var settingsMessage: String?
     @Published var settingsError = false
     @Published var loginEnabled = false
@@ -54,7 +54,9 @@ final class MonitorStore: ObservableObject {
         codexPath = preferences.string(forKey: "codexPath") ?? ""
         claudePath = preferences.string(forKey: "claudePath") ?? ""
         UNUserNotificationCenter.current().delegate = notifications
-        integrationInstalled = ClaudeIntegration(directory: directory).isInstalled
+        let integration = ClaudeIntegration(directory: directory)
+        statusLineEnabled = integration.isInstalled
+        if statusLineEnabled { try? integration.refreshHelper(from: Self.helperURL) }
         for provider in ProviderID.allCases { configure(provider) }
         // Readings change every few minutes and the UI shows minutes, so a coarse, coalescable timer suffices.
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in Task { @MainActor in await self?.tick() } }
@@ -73,7 +75,7 @@ final class MonitorStore: ObservableObject {
     private func configure(_ provider: ProviderID) {
         monitors[provider]?.cancel()
         let client: any AgentClient = provider == .claude
-            ? ClaudeCLIProvider(executableOverride: claudePath, directory: directory)
+            ? ClaudeCLIProvider(executableOverride: claudePath, directory: directory, useStatusLine: statusLineEnabled)
             : CodexProvider(executableOverride: codexPath)
         let monitor = AgentMonitor(client: client, paused: UserDefaults.standard.bool(forKey: "paused.\(provider.rawValue)"), cachedSnapshot: { [directory] scope in
             guard let cached = try? UsageFiles.read(ScopedSnapshot.self, from: directory.appendingPathComponent("quota-\(provider.rawValue).json")),
@@ -152,12 +154,28 @@ final class MonitorStore: ObservableObject {
             savePath(provider)
         }
     }
-    func restoreClaude() {
+    /// Packaged apps keep the helper in Contents/Helpers; development builds keep it beside the app binary.
+    static var helperURL: URL {
+        let packaged = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/UsageBridge")
+        if FileManager.default.isExecutableFile(atPath: packaged.path) { return packaged }
+        return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("UsageBridge") ?? packaged
+    }
+    func setStatusLine(_ enabled: Bool) {
         guard !preview else { return }
+        let integration = ClaudeIntegration(directory: directory)
         do {
-            try ClaudeIntegration(directory: directory).restore(); integrationInstalled = false
-            settingsMessage = "Status line restored. Restart older Claude Code sessions."; settingsError = false
+            if enabled {
+                try integration.install(helper: Self.helperURL)
+                settingsMessage = "Faster updates are on. They begin in new Claude Code sessions."
+            } else {
+                try integration.restore()
+                settingsMessage = "Status line restored. Restart older Claude Code sessions."
+            }
+            settingsError = false
         } catch { settingsMessage = error.localizedDescription; settingsError = true }
+        statusLineEnabled = integration.isInstalled
+        configure(.claude)
+        Task { [weak self] in await self?.monitors[.claude]?.refresh(force: true) }
     }
     func forgetExperimentalConnection() {
         guard !preview else { return }

@@ -6,8 +6,11 @@ public struct ClaudeCLIProvider: AgentClient {
     public var directory: URL
     public var environment: [String: String]
     public var probeTimeout: TimeInterval
-    public init(executableOverride: String = "", directory: URL = UsageFiles.directory, environment: [String: String] = ProcessInfo.processInfo.environment, probeTimeout: TimeInterval = 45) {
+    /// Prefer fresh readings captured by the opt-in Claude Code status line over a `/usage` probe.
+    public var useStatusLine: Bool
+    public init(executableOverride: String = "", directory: URL = UsageFiles.directory, environment: [String: String] = ProcessInfo.processInfo.environment, probeTimeout: TimeInterval = 45, useStatusLine: Bool = false) {
         self.executableOverride = executableOverride; self.directory = directory; self.environment = environment; self.probeTimeout = probeTimeout
+        self.useStatusLine = useStatusLine
     }
     public func checkAuthentication() async throws -> AccountIdentity? {
         try await agentOperation { cancellation in
@@ -20,6 +23,7 @@ public struct ClaudeCLIProvider: AgentClient {
             let cwd = try self.prepareDirectory()
             let deadline = ProcessInfo.processInfo.systemUptime + min(60, max(0.1, self.probeTimeout))
             let before = try self.auth(executable, directory: cwd, cancellation: cancellation, deadline: deadline)
+            if self.useStatusLine, let reading = self.statusLineReading(for: before) { return AccountUsage(identity: before, snapshot: reading) }
             guard try self.supportsProbe(executable, directory: cwd, cancellation: cancellation, deadline: deadline) else { throw AgentError.claudeProbeSetup(.capabilities) }
             let arguments = ["--safe-mode", "--allowed-tools", "", "--disallowed-tools", "*", "--no-chrome", "--strict-mcp-config", "--settings",
                              #"{"disableAllHooks":true,"remoteControlAtStartup":false,"promptSuggestionEnabled":false}"#,
@@ -32,8 +36,28 @@ public struct ClaudeCLIProvider: AgentClient {
             }
             let after = try self.auth(executable, directory: cwd, cancellation: cancellation, deadline: deadline)
             guard before?.scope == after?.scope else { throw AgentError.identityChanged }
+            if let scope = after?.scope { try? UsageFiles.write(ScopedReading(scope: scope, snapshot: snapshot), to: self.probeURL) }
             return AccountUsage(identity: after, snapshot: snapshot)
         }
+    }
+    private var probeURL: URL { directory.appendingPathComponent("claude-probe.json") }
+    /// Status-line captures carry no account, so one is trusted only when it was observed after this
+    /// account was first seen, and only while a full probe from the same account is recent.
+    private func statusLineReading(for identity: AccountIdentity?, at now: Date = Date()) -> UsageSnapshot? {
+        guard let scope = identity?.scope else { return nil }
+        let markerURL = directory.appendingPathComponent("claude-scope.json")
+        guard let marker = try? UsageFiles.read(ScopeMarker.self, from: markerURL), marker.scope == scope else {
+            try? UsageFiles.write(ScopeMarker(scope: scope, since: now), to: markerURL)
+            return nil
+        }
+        guard let probe = try? UsageFiles.read(ScopedReading.self, from: probeURL), probe.scope == scope,
+              now.timeIntervalSince(probe.snapshot.observedAt) < 1800,
+              let capture = try? ClaudeCapture.read(directory: directory), capture.observedAt >= marker.since,
+              now.timeIntervalSince(capture.observedAt) < 300, capture.observedAt.timeIntervalSince(now) < 60 else { return nil }
+        // Keep probe-only windows such as model-specific limits until the next full probe.
+        let captured = Set(capture.windows.map(\.id))
+        let extra = probe.snapshot.windows.filter { !captured.contains($0.id) && !$0.isExpired(at: now) }
+        return UsageSnapshot(provider: .claude, observedAt: capture.observedAt, windows: capture.windows + extra)
     }
     public func signIn(openBrowser: @escaping AgentBrowserOpener) async throws {
         // The official CLI opens the default browser and owns its local callback and credentials.
@@ -191,4 +215,14 @@ private final class CapabilityCache: @unchecked Sendable {
     private var values: [String: Bool] = [:]
     func value(for key: String) -> Bool? { lock.lock(); defer { lock.unlock() }; return values[key] }
     func store(_ value: Bool, for key: String) { lock.lock(); defer { lock.unlock() }; values[key] = value }
+}
+
+private struct ScopeMarker: Codable {
+    var scope: String
+    var since: Date
+}
+
+private struct ScopedReading: Codable {
+    var scope: String
+    var snapshot: UsageSnapshot
 }

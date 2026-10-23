@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     try png.write(to: directory.appendingPathComponent("preview-\(name).png"))
                 }
                 let settingsSample = MonitorStore(preview: true)
-                settingsSample.integrationInstalled = true
+                settingsSample.statusLineEnabled = true
                 // Form contains native scroll views, which ImageRenderer omits. Render its own sample window.
                 let settingsHost = NSHostingView(rootView: SettingsView(store: settingsSample).environment(\.colorScheme, .light))
                 let settingsWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 750), styleMask: [.titled], backing: .buffered, defer: false)

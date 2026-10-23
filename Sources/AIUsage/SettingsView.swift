@@ -43,6 +43,12 @@ struct SettingsView: View {
                         }.help("\(state.phase == .paused ? "Resume" : "Pause") \(provider.title) monitoring")
                     }
                     if state.phase == .signingIn { Text("Finish sign-in in your browser.").font(.caption).foregroundStyle(.secondary) }
+                    if provider == .claude {
+                        Toggle("Faster updates during Claude Code sessions", isOn: Binding(get: { store.statusLineEnabled }, set: { store.setStatusLine($0) }))
+                            .help("Adds a status line to Claude Code settings. Turn off to restore your previous status line.")
+                        Text("Reads usage that Claude Code reports to its status line. Your existing status line keeps working.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 } header: {
                     Label { Text(provider.title) } icon: { ProviderIcon(provider: provider, size: 18) }
                 }
@@ -51,10 +57,6 @@ struct SettingsView: View {
             Section {
                 Text("Accounts stay with your agents. Pause keeps you signed in.")
                     .font(.caption).foregroundStyle(.secondary)
-                if store.integrationInstalled {
-                    Button("Restore previous status line") { store.restoreClaude() }
-                    Text("For older setups. Later edits are protected.").font(.caption).foregroundStyle(.secondary)
-                }
                 Button("Forget experimental connection") { store.forgetExperimentalConnection() }
                     .help("Remove the widget's old saved connection. Agent sign-ins stay unchanged.")
                 Button("Open data folder") { store.openDataFolder() }

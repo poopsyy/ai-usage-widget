@@ -136,6 +136,52 @@ final class AgentTests {
         do { _ = try await provider.fetchAccount(); fail("Expected changed-account rejection") }
         catch { expectEqual(error as? AgentError, .identityChanged) }
     }
+    func testClaudeStatusLineFastPath() async throws {
+        let fixture = try AgentFixture()
+        var provider = try fixture.claude()
+        provider.useStatusLine = true
+        let data = provider.directory
+        let calls = fixture.root.appendingPathComponent("calls")
+        func probed() -> Bool { defer { try? FileManager.default.removeItem(at: calls) }; return FileManager.default.fileExists(atPath: calls.path) }
+        func capture(_ percent: Int, at date: Date = Date()) throws {
+            try? FileManager.default.removeItem(at: data.appendingPathComponent("claude.json"))
+            try ClaudeCapture.capture(Data("{\"rate_limits\":{\"five_hour\":{\"used_percentage\":\(percent),\"resets_at\":1900000000}}}".utf8), directory: data, at: date)
+        }
+        func shift(_ name: String, _ path: [String], by seconds: TimeInterval) throws {
+            let url = data.appendingPathComponent(name)
+            var root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+            if path.count == 1 { root[path[0]] = (root[path[0]] as! Double) + seconds }
+            else { var inner = root[path[0]] as! [String: Any]; inner[path[1]] = (inner[path[1]] as! Double) + seconds; root[path[0]] = inner }
+            try JSONSerialization.data(withJSONObject: root).write(to: url)
+        }
+        // The first read only marks the account, so a capture from before it is never attributed to it.
+        try capture(5, at: Date().addingTimeInterval(-10))
+        _ = try await provider.fetchAccount(); expectTrue(probed())
+        try capture(10)
+        let fast = try await provider.fetchAccount()
+        expectFalse(probed())
+        expectEqual(fast.snapshot.windows.map(\.id), ["five_hour", "seven_day"])
+        expectEqual(fast.snapshot.windows.first?.usedPercent, 10)
+        expectEqual(fast.snapshot.windows.last?.usedPercent, 20) // Probe-only window is kept.
+        // Another account: captures observed before it was seen are ignored.
+        var marker = try JSONSerialization.jsonObject(with: Data(contentsOf: data.appendingPathComponent("claude-scope.json"))) as! [String: Any]
+        marker["scope"] = "another-account"
+        try JSONSerialization.data(withJSONObject: marker).write(to: data.appendingPathComponent("claude-scope.json"))
+        _ = try await provider.fetchAccount(); expectTrue(probed())
+        _ = try await provider.fetchAccount(); expectTrue(probed())
+        // A stale capture falls back to the probe.
+        try shift("claude-scope.json", ["since"], by: -1000)
+        try capture(10, at: Date().addingTimeInterval(-400))
+        _ = try await provider.fetchAccount(); expectTrue(probed())
+        // A fresh capture still needs a recent full probe.
+        try capture(10)
+        try shift("claude-probe.json", ["snapshot", "observedAt"], by: -2000)
+        _ = try await provider.fetchAccount(); expectTrue(probed())
+        _ = try await provider.fetchAccount(); expectFalse(probed())
+        // Disabled by default.
+        provider.useStatusLine = false
+        _ = try await provider.fetchAccount(); expectTrue(probed())
+    }
     func testClaudeRefreshPreservesProbeMetadata() async throws {
         let fixture = try AgentFixture()
         let provider = try fixture.claude(mode: "metadata")

@@ -43,6 +43,15 @@ final class IntegrationTests {
         try integration.restore()
         expectNil(try read()["statusLine"])
     }
+    func testHelperRefreshTracksAppUpdates() throws {
+        try integration.refreshHelper(from: helper)
+        expectFalse(FileManager.default.fileExists(atPath: integration.helperURL.path))
+        try integration.install(helper: helper)
+        try Data("updated helper".utf8).write(to: helper)
+        try integration.refreshHelper(from: helper)
+        expectEqual(try String(contentsOf: integration.helperURL, encoding: .utf8), "updated helper")
+        expectEqual((try FileManager.default.attributesOfItem(atPath: integration.helperURL.path)[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+    }
     func testRefusesToOverwriteChangedStatusLine() throws {
         try write(["statusLine": ["type": "command", "command": "old"]])
         try integration.install(helper: helper)

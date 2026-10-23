@@ -57,12 +57,13 @@ Move the app to its final Applications folder before enabling launch at login.
 2. Existing provider sign-ins are detected automatically. If needed, choose **Sign in** to use the official agent's browser login. API-key-only accounts do not provide subscription allowance.
 3. Read the remaining allowance and reset countdown, or select **Refresh**. For example, a sample reading of **75% remaining · resets in 2h** means a quarter of that window's allowance has been used.
 4. Configure alerts, launch at login, or a provider executable in Settings. **Pause** stops checks without signing the agent out.
+5. Optional: turn on **Faster updates during Claude Code sessions** to read usage that Claude Code reports to its status line, with exact reset times and no extra background check while you work. Your existing status line keeps working; turning it off restores it.
 
 **Stale** identifies older readings. **Awaiting update** means the reported reset has passed and a fresh reading is needed. If a provider is unavailable, check its official tool's sign-in and executable path in Settings.
 
 ### Removal
 
-For an older status-line installation, first use **Restore previous status line** in Settings and restart affected Claude Code sessions. Use **Forget experimental connection** if applicable. Disable launch at login, quit, and remove the app (or run `brew uninstall --cask poopsyy/tap/ai-usage`). Data and recovery backups remain separate; see [Privacy](PRIVACY.md) before removing them.
+If faster Claude updates are on, first turn them off in Settings and restart affected Claude Code sessions. Use **Forget experimental connection** if applicable. Disable launch at login, quit, and remove the app (or run `brew uninstall --cask poopsyy/tap/ai-usage`). Data and recovery backups remain separate; see [Privacy](PRIVACY.md) before removing them.
 
 ## Tech stack
 

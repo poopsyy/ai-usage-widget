@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Optional **Faster updates during Claude Code sessions**: uses the usage Claude Code reports to its status line, with exact reset times, and falls back to the `/usage` check otherwise. It replaces **Restore previous status line**; turning it off restores your previous status line.
+
 ### Fixed
 
 - Homebrew cask generation uses the current macOS minimum-version syntax.
