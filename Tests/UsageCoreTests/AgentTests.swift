@@ -26,6 +26,24 @@ final class AgentTests {
         let expired = try ClaudeCLIUsage.snapshot(screen: "Current session\n90% used\nResets 2020-01-01T00:00:00Z", at: now)
         expectTrue(expired.windows[0].isExpired(at: now)); expectNil(expired.remaining(at: now))
     }
+    func testClaudeResetLabels() throws {
+        // 2027-01-15 08:00:00 UTC
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func reset(_ label: String, at date: Date = now) throws -> Date? {
+            try ClaudeCLIUsage.snapshot(screen: "Current session\n5% used\n\(label)", at: date).windows.first?.resetsAt
+        }
+        expectEqual(try reset("Resets 3pm (UTC)"), Date(timeIntervalSince1970: 1_800_025_200))
+        expectEqual(try reset("Resets 3:30pm (Asia/Jakarta)"), now.addingTimeInterval(1800))
+        expectEqual(try reset("Resets 7am (UTC)"), Date(timeIntervalSince1970: 1_800_082_800))
+        expectEqual(try reset("Resets Jan 22, 9am (UTC)"), Date(timeIntervalSince1970: 1_800_608_400))
+        expectEqual(try reset("Resets Jan 2, 2028, 9am (UTC)"), Date(timeIntervalSince1970: 1_830_416_400))
+        expectEqual(try reset("Resets Jan 2, 9am (UTC)", at: Date(timeIntervalSince1970: 1_798_632_000)), Date(timeIntervalSince1970: 1_798_880_400))
+        expectTrue(try reset("Resets 3pm (Not/AZone)") != nil)
+        expectNil(try reset("Resets Oct 30 (UTC)"))
+        expectNil(try reset("Resets 13pm (UTC)"))
+        let wide = try ClaudeCLIUsage.snapshot(screen: "Current session   ███   5% used   Resets 3pm (UTC)", at: now)
+        expectEqual(wide.windows.first?.resetsAt, Date(timeIntervalSince1970: 1_800_025_200))
+    }
     func testScopesAndLoginURLs() {
         let first = AccountIdentity(provider: .claude, accountID: "a", workspaceID: "one", displayName: "Sample", profile: "one")
         var other = first; other.profile = "two"; expectFalse(first.scope == other.scope)

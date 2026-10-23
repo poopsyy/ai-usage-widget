@@ -8,6 +8,7 @@ struct CheckRunner {
         let agents = AgentTests()
         let checks: [(String, () async throws -> Void)] = [
             ("Terminal replay and Claude quota parsing", { try agents.testTerminalAndQuotaParsing() }),
+            ("Claude reset labels", { try agents.testClaudeResetLabels() }),
             ("Account scopes and login URL restrictions", { agents.testScopesAndLoginURLs() }),
             ("Executable discovery", { try agents.testDiscovery() }),
             ("Experimental connection cleanup is scoped and retryable", { try agents.testExperimentalCleanupIsScopedAndRetryable() }),
@@ -29,6 +30,7 @@ struct CheckRunner {
             ("Stale, future and expired readings", { usage.testStaleExpiredAndFutureSnapshots() }),
             ("Alert thresholds and persistence", { try usage.testAlertThresholdsAndPersistence() }),
             ("Alert deduplication and stale suppression", { try usage.testFirstHighReadingSuppressesLowerThresholdAndOldData() }),
+            ("Alert deduplication across reset precision", { try usage.testAlertToleratesResetPrecision() }),
             ("Atomic capture and monotonic snapshots", { try await usage.testSnapshotProviderAndAtomicCapture() }),
             ("Settings restoration preserves edits", { try IntegrationTests().testInstallAndRestorePreserveOtherChanges() }),
             ("Fresh setup and idempotence", { try IntegrationTests().testFreshInstallIsIdempotentAndRestorable() }),

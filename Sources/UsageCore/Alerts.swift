@@ -18,8 +18,17 @@ public struct AlertLedger: Codable, Sendable {
             let eligible = [80, 95].filter { window.usedPercent >= Double($0) }
             guard let threshold = eligible.last else { return nil }
             let key = "\(snapshot.provider.rawValue)|\(window.id)|\(Int(reset.timeIntervalSince1970))|\(threshold)"
-            guard delivered[key] == nil else { return nil }
+            guard !isDelivered(provider: snapshot.provider, window: window.id, threshold: threshold, reset: reset) else { return nil }
             return UsageAlert(key: key, provider: snapshot.provider, window: window, threshold: threshold)
+        }
+    }
+    /// Sources report the same reset with minute or second precision, so nearby resets are one window.
+    private func isDelivered(provider: ProviderID, window: String, threshold: Int, reset: Date) -> Bool {
+        delivered.keys.contains { key in
+            let parts = key.split(separator: "|", omittingEmptySubsequences: false)
+            guard parts.count == 4, parts[0] == provider.rawValue, parts[1] == window, parts[3] == String(threshold),
+                  let seconds = TimeInterval(parts[2]) else { return false }
+            return abs(seconds - reset.timeIntervalSince1970) <= 1800
         }
     }
     public mutating func markDelivered(_ alert: UsageAlert, at now: Date) {

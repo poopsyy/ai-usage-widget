@@ -101,7 +101,7 @@ public enum ClaudeCLIUsage {
                 else { pending = nil }
             }
             guard pending != nil else { continue }
-            if let groups = match(#"(?:^|\s)(\d+(?:\.\d+)?)%\s*(used|remaining|of limit used)\b"#, line),
+            if let groups = match(percentPattern, line),
                let percent = Double(groups[0]), (0...100).contains(percent) {
                 let value = groups[1].lowercased() == "remaining" ? 100 - percent : percent
                 if let used, used != value { throw AgentError.invalidResponse(.claude) }
@@ -114,26 +114,65 @@ public enum ClaudeCLIUsage {
         guard Set(windows.map(\.id)).count == windows.count else { throw AgentError.invalidResponse(.claude) }
         return UsageSnapshot(provider: .claude, observedAt: now, windows: windows)
     }
-    private static func match(_ pattern: String, _ text: String) -> [String]? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-              let result = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
+    private static func regex(_ pattern: String) -> NSRegularExpression {
+        // Patterns are compile-time constants.
+        try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }
+    private static let percentPattern = regex(#"(?:^|\s)(\d+(?:\.\d+)?)%\s*(used|remaining|of limit used)\b"#)
+    private static let isoPattern = regex(#"(\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d))"#)
+    private static let relativePattern = regex(#"resets?\s+in\s+(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?\s*$"#)
+    private static let labelPattern = regex(#"resets\s+(.+?)(?:\s+\(([A-Za-z_]+(?:/[A-Za-z0-9_+\-]+)*)\))?\s*$"#)
+    private static let timePattern = regex(#"^(\d{1,2})(?::(\d\d))?(am|pm)$"#)
+    private static let datePattern = regex(#"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec) (\d{1,2})(?:, (\d{4}))?, (\d{1,2})(?::(\d\d))?(am|pm)$"#)
+    private static let months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    private static let fractionalISO: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return formatter
+    }()
+    private static let plainISO = ISO8601DateFormatter()
+
+    private static func match(_ regex: NSRegularExpression, _ text: String) -> [String]? {
+        guard let result = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
         return (1..<result.numberOfRanges).map { Range(result.range(at: $0), in: text).map { String(text[$0]) } ?? "" }
     }
     private static func resetDate(_ text: String, at now: Date) -> Date? {
-        if let groups = match(#"(\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d))"#, text) {
+        if let groups = match(isoPattern, text) {
             let value = groups[0].replacingOccurrences(of: " ", with: "T")
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: value) { return date }
-            formatter.formatOptions = [.withInternetDateTime]
-            return formatter.date(from: value)
+            return fractionalISO.date(from: value) ?? plainISO.date(from: value)
         }
-        // Relative durations are provider-reported. Partial calendar dates/time-only labels are ambiguous.
-        if let groups = match(#"resets?\s+in\s+(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?\s*$"#, text) {
+        // Relative durations are provider-reported.
+        if let groups = match(relativePattern, text) {
             let hours = Double(groups[0]) ?? 0
             let minutes = Double(groups[1]) ?? 0
             let seconds = hours * 3600 + minutes * 60 + (Double(groups[2]) ?? 0)
             if seconds > 0 { return now.addingTimeInterval(seconds) }
+        }
+        // Claude Code labels: "3pm (Zone)" within a day, "Oct 30, 9am (Zone)" or "Jan 2, 2027, 9am (Zone)" otherwise.
+        // Date-only and weekday labels stay unknown.
+        guard let groups = match(labelPattern, text) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: groups[1]) ?? .current
+        let label = groups[0].replacingOccurrences(of: "\u{202f}", with: "").lowercased()
+        func hour(_ value: String, _ meridiem: String) -> Int? {
+            guard let value = Int(value), (1...12).contains(value) else { return nil }
+            return value % 12 + (meridiem == "pm" ? 12 : 0)
+        }
+        if let time = match(timePattern, label), let hour = hour(time[0], time[2]) {
+            let minute = Int(time[1]) ?? 0
+            guard minute < 60 else { return nil }
+            return calendar.nextDate(after: now.addingTimeInterval(-60), matching: DateComponents(hour: hour, minute: minute, second: 0), matchingPolicy: .nextTime)
+        }
+        if let date = match(datePattern, label), let month = months.firstIndex(of: date[0]), let day = Int(date[1]), let hour = hour(date[3], date[5]) {
+            let minute = Int(date[4]) ?? 0
+            guard minute < 60 else { return nil }
+            let explicitYear = Int(date[2])
+            var components = DateComponents(year: explicitYear ?? calendar.component(.year, from: now), month: month + 1, day: day, hour: hour, minute: minute)
+            guard var result = calendar.date(from: components) else { return nil }
+            if explicitYear == nil, result < now.addingTimeInterval(-86400) {
+                components.year = (components.year ?? 0) + 1
+                guard let next = calendar.date(from: components) else { return nil }
+                result = next
+            }
+            return result
         }
         return nil
     }

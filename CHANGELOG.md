@@ -5,6 +5,8 @@
 ### Fixed
 
 - Homebrew cask generation uses the current macOS minimum-version syntax.
+- Claude reset times are read from Claude Code's `/usage` labels, so Claude countdowns and low-allowance alerts work.
+- Low-allowance alerts no longer repeat when a reset time is reported with slightly different precision.
 
 ## 0.1.0 - 2026-10-23
 

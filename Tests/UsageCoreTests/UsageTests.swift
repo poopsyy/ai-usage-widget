@@ -81,6 +81,15 @@ final class UsageTests {
         expectTrue(AlertLedger().candidates(for: sample(used: 97, observed: now.addingTimeInterval(-1000)), at: now).isEmpty)
         expectTrue(AlertLedger().candidates(for: sample(used: 97, reset: now), at: now).isEmpty)
     }
+    func testAlertToleratesResetPrecision() throws {
+        var ledger = AlertLedger()
+        let alert = try require(ledger.candidates(for: sample(used: 85), at: now).first)
+        ledger.markDelivered(alert, at: now)
+        expectTrue(ledger.candidates(for: sample(used: 85, reset: now.addingTimeInterval(3600 - 59)), at: now).isEmpty)
+        expectTrue(ledger.candidates(for: sample(used: 85, reset: now.addingTimeInterval(3600 + 59)), at: now).isEmpty)
+        // A genuinely new window alerts again.
+        expectEqual(ledger.candidates(for: sample(used: 85, reset: now.addingTimeInterval(3600 + 18000)), at: now).count, 1)
+    }
     func testSnapshotProviderAndAtomicCapture() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
