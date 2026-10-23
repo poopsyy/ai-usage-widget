@@ -4,7 +4,7 @@ A native macOS menu bar app for Claude and Codex subscription allowance.
 
 ### Installation
 
-Requires macOS 14+. Download the `arm64` ZIP for Apple silicon or `x86_64` ZIP for Intel and its matching `.sha256`. Verify the checksum, unzip, and move **AI Usage.app** to Applications.
+Requires macOS 14+. One universal ZIP runs natively on Apple silicon and Intel. Download it and its matching `.sha256`. Verify the checksum, unzip, and move **AI Usage.app** to Applications.
 
 Once this is the latest published stable release, the terminal installer is available:
 
@@ -12,7 +12,7 @@ Once this is the latest published stable release, the terminal installer is avai
 curl -fsSL https://github.com/poopsyy/ai-usage-widget/releases/latest/download/install.sh | bash
 ```
 
-It selects your native architecture, verifies the download, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it before rerunning the installer to update.
+It verifies the download, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it before rerunning the installer to update.
 
 Provider tools are installed separately. Use signed-in Codex CLI and/or compatible Claude Code. Claude integration is experimental and has not passed live-account validation; the Claude desktop app alone is insufficient.
 

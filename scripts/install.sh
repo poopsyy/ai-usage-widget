@@ -24,7 +24,7 @@ done
 os_version="$(sw_vers -productVersion)"
 [[ "${os_version%%.*}" -ge 14 ]] || fail 'macOS 14 or later is required.'
 architecture="$(uname -m)"
-# Prefer the native build even when Terminal is running under Rosetta.
+# Releases before 0.2.0 ship per-architecture archives. Prefer the native one even under Rosetta.
 if [[ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" == 1 ]]; then architecture=arm64; fi
 case "$architecture" in arm64|x86_64) ;; *) fail "Unsupported architecture: $architecture." ;; esac
 if pgrep -x AIUsage >/dev/null; then fail 'Quit AI Usage before installing or updating.'; fi
@@ -61,9 +61,12 @@ cleanup() {
   rm -rf "$staging"
 }
 trap cleanup EXIT
-asset="AI-Usage-${version}-macos-${architecture}.zip"
-echo "Downloading AI Usage $version ($architecture)…"
-download --output "$staging/$asset" "$repository/releases/download/v$version/$asset"
+echo "Downloading AI Usage ${version}…"
+asset="AI-Usage-${version}-macos-universal.zip"
+if ! download --output "$staging/$asset" "$repository/releases/download/v$version/$asset" 2>/dev/null; then
+  asset="AI-Usage-${version}-macos-${architecture}.zip"
+  download --output "$staging/$asset" "$repository/releases/download/v$version/$asset"
+fi
 download --output "$staging/$asset.sha256" "$repository/releases/download/v$version/$asset.sha256"
 # Parse exactly one digest and the expected filename; never trust checksum paths.
 checksum="$(cat "$staging/$asset.sha256")"

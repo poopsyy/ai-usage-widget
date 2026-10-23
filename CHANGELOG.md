@@ -6,6 +6,10 @@
 
 - Optional **Faster updates during Claude Code sessions**: uses the usage Claude Code reports to its status line, with exact reset times, and falls back to the `/usage` check otherwise. It replaces **Restore previous status line**; turning it off restores your previous status line.
 
+### Changed
+
+- Releases ship one universal app for Apple silicon and Intel. The installer and Homebrew cask use it, and the installer still installs per-architecture archives of older releases.
+
 ### Fixed
 
 - Homebrew cask generation uses the current macOS minimum-version syntax.

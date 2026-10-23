@@ -30,11 +30,11 @@ Open **AI Usage** from Applications. Quit it before updating with `brew update` 
 curl -fsSL https://github.com/poopsyy/ai-usage-widget/releases/latest/download/install.sh | bash
 ```
 
-The installer selects the native architecture, verifies the checksum and bundle signature, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it and rerun the command to update. To inspect the script or select a version/location, download it first and run `bash install.sh --help`.
+The installer verifies the checksum and bundle signature, and installs into `~/Applications` without sudo. Open the app from Finder. Quit it and rerun the command to update. To inspect the script or select a version/location, download it first and run `bash install.sh --help`.
 
 ### Download
 
-Download a build from [Releases](https://github.com/poopsyy/ai-usage-widget/releases): choose `macos-arm64.zip` for Apple silicon or `macos-x86_64.zip` for Intel. Download its matching `.zip.sha256`, verify it with `shasum -a 256 -c <checksum-file>`, unzip, and move **AI Usage.app** to Applications.
+Download a build from [Releases](https://github.com/poopsyy/ai-usage-widget/releases): download `macos-universal.zip` (it runs natively on Apple silicon and Intel; releases before 0.2.0 offer `macos-arm64.zip` and `macos-x86_64.zip` instead) and its matching `.zip.sha256`, verify it with `shasum -a 256 -c <checksum-file>`, unzip, and move **AI Usage.app** to Applications.
 
 Use one installation method to avoid duplicate app copies. Early builds are ad-hoc signed and **not notarized by Apple**. If macOS blocks an app you trust, follow Apple's [per-app approval instructions](https://support.apple.com/en-us/102445).
 

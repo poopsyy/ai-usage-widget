@@ -24,13 +24,16 @@ jobs:
         with:
           persist-credentials: false
       - run: bash scripts/test.sh
+      # Tests run natively on both architectures; one universal app is packaged.
       - name: Build the tagged version
+        if: matrix.architecture == 'arm64'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: bash scripts/package-release.sh "$RELEASE_TAG"
-      - uses: actions/upload-artifact@v4
+      - if: matrix.architecture == 'arm64'
+        uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.architecture }}
+          name: release-universal
           path: |
             dist/AI-Usage-*.zip
             dist/AI-Usage-*.zip.sha256

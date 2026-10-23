@@ -39,19 +39,20 @@ while [[ $# -gt 0 ]]; do
   if [[ "$1" == --output ]]; then output="$2"; shift 2; else url="$1"; shift; fi
 done
 if [[ "$url" == */releases/latest ]]; then
-  echo -n 'https://github.com/poopsyy/ai-usage-widget/releases/tag/v0.1.0'
+  echo -n 'https://github.com/poopsyy/ai-usage-widget/releases/tag/v0.2.0'
 else
   cp "$FIXTURE_ASSETS/${url##*/}" "$output"
 fi
 ''')
-        for arch in ("arm64", "x86_64"):
-            name = f"AI-Usage-0.1.0-macos-{arch}.zip"
+        # 0.1.0 shipped per-architecture archives; later releases ship one universal archive.
+        for version, flavor in (("0.1.0", "arm64"), ("0.1.0", "x86_64"), ("0.2.0", "universal")):
+            name = f"AI-Usage-{version}-macos-{flavor}.zip"
             with zipfile.ZipFile(self.assets / name, "w") as archive:
                 archive.writestr("AI Usage.app/Contents/Info.plist", plistlib.dumps({
                     "CFBundleIdentifier": "dev.local.ai-usage-widget",
-                    "CFBundleShortVersionString": "0.1.0",
+                    "CFBundleShortVersionString": version,
                 }))
-                archive.writestr("AI Usage.app/Contents/Resources/architecture", arch)
+                archive.writestr("AI Usage.app/Contents/Resources/architecture", flavor)
             digest = hashlib.sha256((self.assets / name).read_bytes()).hexdigest()
             (self.assets / f"{name}.sha256").write_text(f"{digest}  {name}\n")
 
@@ -73,8 +74,17 @@ fi
         (self.app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": bundle_id}))
         (self.app / "previous").write_text("keep me")
 
-    def test_latest_installs_native_app(self):
+    def test_latest_installs_universal_app(self):
         self.run_install()
+        self.assertEqual((self.app / "Contents/Resources/architecture").read_text(), "universal")
+
+    def test_universal_preferred_on_intel(self):
+        self.env["FAKE_ARCH"] = "x86_64"
+        self.run_install("--version", "0.2.0")
+        self.assertEqual((self.app / "Contents/Resources/architecture").read_text(), "universal")
+
+    def test_older_release_falls_back_to_native_archive(self):
+        self.run_install("--version", "0.1.0")
         self.assertEqual((self.app / "Contents/Resources/architecture").read_text(), "arm64")
 
     def test_explicit_version_and_intel(self):
@@ -84,17 +94,17 @@ fi
 
     def test_rosetta_selects_arm(self):
         self.env.update(FAKE_ARCH="x86_64", FAKE_ARM="1")
-        self.run_install()
+        self.run_install("--version", "0.1.0")
         self.assertEqual((self.app / "Contents/Resources/architecture").read_text(), "arm64")
 
     def test_bad_checksum_preserves_previous_app(self):
         self.previous_app()
-        (self.assets / "AI-Usage-0.1.0-macos-arm64.zip").write_bytes(b"corrupt")
+        (self.assets / "AI-Usage-0.2.0-macos-universal.zip").write_bytes(b"corrupt")
         self.run_install(success=False)
         self.assertTrue((self.app / "previous").exists())
 
     def test_untrusted_checksum_filename_rejected(self):
-        checksum = self.assets / "AI-Usage-0.1.0-macos-arm64.zip.sha256"
+        checksum = self.assets / "AI-Usage-0.2.0-macos-universal.zip.sha256"
         checksum.write_text("0" * 64 + "  ../../other.zip\n")
         self.run_install(success=False)
         self.assertFalse(self.app.exists())
@@ -146,24 +156,25 @@ fi
             with self.subTest(args=args):
                 self.run_install(*args, success=False)
 
-    def test_cask_contains_both_verified_architectures(self):
-        result = CASK.render("v0.1.0", self.assets)
-        for arch in ("arm64", "x86_64"):
-            digest = (self.assets / f"AI-Usage-0.1.0-macos-{arch}.zip.sha256").read_text().split()[0]
-            self.assertIn(digest, result)
+    def test_cask_contains_verified_universal_archive(self):
+        result = CASK.render("v0.2.0", self.assets)
+        digest = (self.assets / "AI-Usage-0.2.0-macos-universal.zip.sha256").read_text().split()[0]
+        self.assertIn(f'sha256 "{digest}"', result)
+        self.assertIn("macos-universal.zip", result)
+        self.assertNotIn("arch ", result)
         self.assertIn('depends_on macos: :sonoma', result)
         self.assertIn('app "AI Usage.app"', result)
 
     def test_cask_refuses_missing_or_modified_assets_and_bad_version(self):
         with self.assertRaises(ValueError):
             CASK.render('bad"version', self.assets)
-        archive = self.assets / "AI-Usage-0.1.0-macos-x86_64.zip"
+        archive = self.assets / "AI-Usage-0.2.0-macos-universal.zip"
         archive.write_bytes(b"corrupt")
         with self.assertRaises(ValueError):
-            CASK.render("0.1.0", self.assets)
+            CASK.render("0.2.0", self.assets)
         archive.unlink()
         with self.assertRaises(OSError):
-            CASK.render("0.1.0", self.assets)
+            CASK.render("0.2.0", self.assets)
 
 
 if __name__ == "__main__":

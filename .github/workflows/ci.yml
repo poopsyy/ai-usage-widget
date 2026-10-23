@@ -26,10 +26,13 @@ jobs:
         with:
           persist-credentials: false
       - run: bash scripts/test.sh
-      - run: bash scripts/package-release.sh
-      - uses: actions/upload-artifact@v4
+      # Tests run natively on both architectures; one universal app is packaged.
+      - if: matrix.architecture == 'arm64'
+        run: bash scripts/package-release.sh
+      - if: matrix.architecture == 'arm64'
+        uses: actions/upload-artifact@v4
         with:
-          name: AI-Usage-macos-${{ matrix.architecture }}
+          name: AI-Usage-macos-universal
           path: |
             dist/AI-Usage-*.zip
             dist/AI-Usage-*.zip.sha256

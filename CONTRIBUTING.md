@@ -35,10 +35,10 @@ Describe the problem, resulting behavior, and checks performed in the pull reque
 
 ## Release packaging
 
-Run `bash scripts/package-release.sh` to build the current architecture's ZIP and SHA-256 checksum under `dist/`. Version arguments must match the app's marketing version. Update the plist and provider client version together before tagging a release.
+Run `bash scripts/package-release.sh` to build the universal (arm64 + x86_64) ZIP and SHA-256 checksum under `dist/`; Command Line Tools are enough. `bash scripts/build-app.sh debug` builds a faster native-only app. Version arguments must match the app's marketing version. Update the plist and provider client version together before tagging a release.
 
-A matching `vX.Y.Z` tag triggers native Apple silicon and Intel builds and creates a **draft** release with both ZIP/checksum pairs, `install.sh`, and a pinned `ai-usage.rb`. Review the assets and release notes before publishing. Keep the ad-hoc signing and lack of notarization explicit.
+A matching `vX.Y.Z` tag runs the checks on Apple silicon and Intel, packages one universal app, and creates a **draft** release with its ZIP/checksum pair, `install.sh`, and a pinned `ai-usage.rb`. Review the assets and release notes before publishing. Keep the ad-hoc signing and lack of notarization explicit.
 
-The terminal installer needs a published release containing `install.sh`. To update the [Homebrew tap](https://github.com/poopsyy/homebrew-tap), add that release's generated cask as `Casks/ai-usage.rb` in the separate `poopsyy/homebrew-tap` repository. Update the cask only after publishing the matching assets. To generate it locally, supply both architecture ZIP/checksum pairs to `python3 scripts/generate-cask.py X.Y.Z dist`.
+The terminal installer needs a published release containing `install.sh`. To update the [Homebrew tap](https://github.com/poopsyy/homebrew-tap), add that release's generated cask as `Casks/ai-usage.rb` in the separate `poopsyy/homebrew-tap` repository. Update the cask only after publishing the matching assets. To generate it locally, supply the universal ZIP/checksum pair to `python3 scripts/generate-cask.py X.Y.Z dist`.
 
 Do not commit generated app bundles, archives, or snapshots. Contributions are distributed under the project's [MIT license](LICENSE).

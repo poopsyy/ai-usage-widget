@@ -9,15 +9,34 @@ if [[ "$configuration" != "release" && "$configuration" != "debug" ]]; then
 fi
 export CLANG_MODULE_CACHE_PATH="$root/.build/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$root/.build/ModuleCache"
-swift build --disable-sandbox --cache-path "$root/.build/cache" -c "$configuration"
-bin_dir="$(swift build --disable-sandbox --cache-path "$root/.build/cache" -c "$configuration" --show-bin-path)"
+build() { swift build --disable-sandbox --cache-path "$root/.build/cache" -c "$configuration" "$@"; }
 mkdir -p "$root/dist"
 staging="$(mktemp -d "$root/dist/.app-build.XXXXXX")"
 trap 'rm -rf "$staging"' EXIT
 app="$staging/AI Usage.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
-cp "$bin_dir/AIUsage" "$app/Contents/MacOS/AIUsage"
-cp "$bin_dir/UsageBridge" "$app/Contents/Helpers/UsageBridge"
+if [[ "$configuration" == release ]]; then
+  # One universal app for Apple silicon and Intel. Per-triple builds work with Command Line Tools alone.
+  slices=()
+  for architecture in arm64 x86_64; do
+    build --triple "$architecture-apple-macosx14.0"
+    slices+=("$(build --triple "$architecture-apple-macosx14.0" --show-bin-path)")
+  done
+  bin_dir="${slices[0]}"
+  for product in AIUsage UsageBridge; do
+    lipo -create "${slices[0]}/$product" "${slices[1]}/$product" -output "$staging/$product"
+    for architecture in arm64 x86_64; do
+      lipo "$staging/$product" -verify_arch "$architecture" || { echo "$product is missing $architecture" >&2; exit 1; }
+    done
+  done
+  mv "$staging/AIUsage" "$app/Contents/MacOS/AIUsage"
+  mv "$staging/UsageBridge" "$app/Contents/Helpers/UsageBridge"
+else
+  build
+  bin_dir="$(build --show-bin-path)"
+  cp "$bin_dir/AIUsage" "$app/Contents/MacOS/AIUsage"
+  cp "$bin_dir/UsageBridge" "$app/Contents/Helpers/UsageBridge"
+fi
 cp "$root/Resources/Info.plist" "$app/Contents/Info.plist"
 cp "$root/LICENSE" "$app/Contents/Resources/LICENSE"
 cp -R "$bin_dir/AIUsage_AIUsage.bundle" "$app/Contents/Resources/"
