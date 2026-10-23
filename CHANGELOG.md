@@ -10,6 +10,8 @@
 - Claude checks replay terminal output incrementally instead of re-rendering the full transcript every 50 ms, greatly reducing CPU use.
 - Claude checks wait briefly for the weekly row instead of saving a partial reading, and no longer mistake tips that mention `/login` for a signed-out account.
 - Agent output written just before the process exits is no longer dropped.
+- Connected refreshes skip the separate sign-in check, and Claude Code's option check runs once per installed version: Codex now starts one agent process per refresh and Claude three instead of five.
+- Claude sign-in checks allow for slow cold starts, Codex sign-out detection no longer matches unrelated errors, and resuming during a rate-limit cooldown explains the wait.
 
 ## 0.1.0 - 2026-10-23
 

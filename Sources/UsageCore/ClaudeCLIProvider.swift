@@ -6,23 +6,21 @@ public struct ClaudeCLIProvider: AgentClient {
     public var directory: URL
     public var environment: [String: String]
     public var probeTimeout: TimeInterval
-    public init(executableOverride: String = "", directory: URL = UsageFiles.directory, environment: [String: String] = ProcessInfo.processInfo.environment, probeTimeout: TimeInterval = 30) {
+    public init(executableOverride: String = "", directory: URL = UsageFiles.directory, environment: [String: String] = ProcessInfo.processInfo.environment, probeTimeout: TimeInterval = 45) {
         self.executableOverride = executableOverride; self.directory = directory; self.environment = environment; self.probeTimeout = probeTimeout
     }
     public func checkAuthentication() async throws -> AccountIdentity? {
         try await agentOperation { cancellation in
-            try self.auth(self.executable(), directory: self.prepareDirectory(), cancellation: cancellation, deadline: ProcessInfo.processInfo.systemUptime + 10)
+            try self.auth(self.executable(), directory: self.prepareDirectory(), cancellation: cancellation, deadline: ProcessInfo.processInfo.systemUptime + 20)
         }
     }
     public func fetchAccount() async throws -> AccountUsage {
         try await agentOperation { cancellation in
             let executable = try self.executable()
             let cwd = try self.prepareDirectory()
-            let deadline = ProcessInfo.processInfo.systemUptime + min(30, max(0.1, self.probeTimeout))
+            let deadline = ProcessInfo.processInfo.systemUptime + min(60, max(0.1, self.probeTimeout))
             let before = try self.auth(executable, directory: cwd, cancellation: cancellation, deadline: deadline)
-            let help = try self.command(executable, arguments: ["--help"], directory: cwd, cancellation: cancellation, deadline: deadline)
-            let helpText = String(decoding: help, as: UTF8.self)
-            guard ["--safe-mode", "--strict-mcp-config", "--settings", "--session-id", "--no-chrome", "--disallowed-tools"].allSatisfy(helpText.contains) else { throw AgentError.claudeProbeSetup(.capabilities) }
+            guard try self.supportsProbe(executable, directory: cwd, cancellation: cancellation, deadline: deadline) else { throw AgentError.claudeProbeSetup(.capabilities) }
             let arguments = ["--safe-mode", "--allowed-tools", "", "--disallowed-tools", "*", "--no-chrome", "--strict-mcp-config", "--settings",
                              #"{"disableAllHooks":true,"remoteControlAtStartup":false,"promptSuggestionEnabled":false}"#,
                              "--session-id", UUID().uuidString.lowercased()]
@@ -49,6 +47,19 @@ public struct ClaudeCLIProvider: AgentClient {
     private func executable() throws -> URL {
         guard let result = ExecutableLocator.find(.claude, override: executableOverride, environment: environment) else { throw AgentError.notInstalled(.claude) }
         return result
+    }
+    /// Flags are read from `--help` once per installed Claude Code build.
+    private func supportsProbe(_ executable: URL, directory: URL, cancellation: AgentCancellation, deadline: TimeInterval) throws -> Bool {
+        let resolved = executable.resolvingSymlinksInPath()
+        let attributes = try? FileManager.default.attributesOfItem(atPath: resolved.path)
+        let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let key = "\(resolved.path)|\(modified)|\((attributes?[.size] as? NSNumber)?.intValue ?? -1)"
+        if let known = CapabilityCache.shared.value(for: key) { return known }
+        let help = try command(executable, arguments: ["--help"], directory: directory, cancellation: cancellation, deadline: deadline)
+        let text = String(decoding: help, as: UTF8.self)
+        let supported = ["--safe-mode", "--strict-mcp-config", "--settings", "--session-id", "--no-chrome", "--disallowed-tools"].allSatisfy(text.contains)
+        CapabilityCache.shared.store(supported, for: key)
+        return supported
     }
     private func prepareDirectory() throws -> URL {
         do {
@@ -172,4 +183,12 @@ public struct ClaudeCLIProvider: AgentClient {
             if process.hasExited { throw AgentError.unavailable(.claude) }
         }
     }
+}
+
+private final class CapabilityCache: @unchecked Sendable {
+    static let shared = CapabilityCache()
+    private let lock = NSLock()
+    private var values: [String: Bool] = [:]
+    func value(for key: String) -> Bool? { lock.lock(); defer { lock.unlock() }; return values[key] }
+    func store(_ value: Bool, for key: String) { lock.lock(); defer { lock.unlock() }; values[key] = value }
 }

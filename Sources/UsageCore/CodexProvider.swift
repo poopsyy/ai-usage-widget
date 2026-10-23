@@ -87,9 +87,10 @@ final class AgentRPCSession: @unchecked Sendable {
     private var nextID = 0
     private var notifications: [[String: Any]] = []
     init(process: AgentProcess) { self.process = process }
+    private static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
     func stop() { process.stop() }
     func initialize() throws {
-        _ = try request(method: "initialize", params: ["clientInfo": ["name": "ai_usage_widget", "title": "AI Usage", "version": "0.1.0"]])
+        _ = try request(method: "initialize", params: ["clientInfo": ["name": "ai_usage_widget", "title": "AI Usage", "version": Self.version]])
         try send(["method": "initialized", "params": [:]])
     }
     private func send(_ root: [String: Any]) throws {
@@ -107,7 +108,7 @@ final class AgentRPCSession: @unchecked Sendable {
             if response["id"] as? Int == nextID {
                 if let error = response["error"] as? [String: Any] {
                     let message = (error["message"] as? String ?? "").lowercased()
-                    if ["auth", "sign in", "unauthorized", "401"].contains(where: message.contains) { throw AgentError.signedOut(.codex) }
+                    if ["unauthorized", "401", "not logged in", "login required", "sign in", "authentication required"].contains(where: message.contains) { throw AgentError.signedOut(.codex) }
                     if message.contains("429") || message.contains("rate limit") { throw AgentError.rateLimited(nil) }
                     throw AgentError.unavailable(.codex)
                 }

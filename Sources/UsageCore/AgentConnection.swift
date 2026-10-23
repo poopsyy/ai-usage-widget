@@ -112,6 +112,7 @@ public final class AgentMonitor {
         if value { state = AgentState(phase: .paused) }
         else {
             state = AgentState()
+            if Date() < cooldown { state.error = AgentError.rateLimited(cooldown).localizedDescription }
             let previous = operation
             await previous?.value
             guard !paused else { return }
@@ -142,18 +143,24 @@ public final class AgentMonitor {
             do {
                 if login { try await self.client.signIn(openBrowser: openBrowser) }
                 try Task.checkCancellation()
-                let identity = try await self.client.checkAuthentication()
-                guard epoch == self.generation, !self.paused, !Task.isCancelled else { return }
-                if let scope = identity?.scope {
-                    if self.state.scope != scope {
-                        if !login { self.state.phase = .unavailable }
-                        self.state.snapshot = self.cachedSnapshot(scope)
-                        self.state.scope = scope
-                    }
-                } else { self.state.snapshot = nil; self.state.scope = nil }
+                // A connected account is verified inside each read, so the separate check runs only
+                // to restore a cached reading at startup, after sign-in, or after a failure.
+                let expectedScope: String?
+                if login || self.state.scope == nil || self.state.phase != .connected {
+                    let identity = try await self.client.checkAuthentication()
+                    guard epoch == self.generation, !self.paused, !Task.isCancelled else { return }
+                    if let scope = identity?.scope {
+                        if self.state.scope != scope {
+                            if !login { self.state.phase = .unavailable }
+                            self.state.snapshot = self.cachedSnapshot(scope)
+                            self.state.scope = scope
+                        }
+                    } else { self.state.snapshot = nil; self.state.scope = nil }
+                    expectedScope = identity?.scope
+                } else { expectedScope = self.state.scope }
                 let reading = try await self.client.fetchAccount()
                 guard epoch == self.generation, !self.paused, !Task.isCancelled else { return }
-                guard identity?.scope == reading.identity?.scope else { throw AgentError.identityChanged }
+                guard expectedScope == reading.identity?.scope else { throw AgentError.identityChanged }
                 self.failures = 0; self.nextRefresh = Date().addingTimeInterval(300)
                 self.state = AgentState(snapshot: reading.snapshot, scope: reading.identity?.scope, phase: .connected)
             } catch {

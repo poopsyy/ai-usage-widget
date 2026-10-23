@@ -209,9 +209,13 @@ final class AgentTests {
         async let duplicate: Void = monitor.refresh(force: true)
         _ = await (first, duplicate)
         expectEqual(await client.readCount(), 1); expectTrue(monitor.state.connected)
+        // A connected account is verified by the read itself; no separate auth process.
+        let checks = await client.checkCount()
+        await monitor.refresh(force: true)
+        expectEqual(await client.checkCount(), checks); expectEqual(await client.readCount(), 2); expectTrue(monitor.state.connected)
         await monitor.setPaused(true)
         expectEqual(monitor.state.phase, .paused); expectNil(monitor.state.snapshot)
-        await monitor.refresh(force: true); expectEqual(await client.readCount(), 1)
+        await monitor.refresh(force: true); expectEqual(await client.readCount(), 2)
         await monitor.setPaused(false); expectTrue(monitor.state.connected)
         await client.setError(.unavailable(.claude))
         await monitor.refresh(force: true)
@@ -260,6 +264,10 @@ final class AgentTests {
         await monitor.refresh(force: true)
         expectEqual(await client.readCount(), reads)
         expectTrue(monitor.nextRefresh > Date().addingTimeInterval(50))
+        // Resuming during a cooldown explains the wait instead of showing a bare "Unavailable".
+        await monitor.setPaused(true); await monitor.setPaused(false)
+        expectEqual(monitor.state.error, AgentError.rateLimited(nil).localizedDescription)
+        expectEqual(await client.readCount(), reads)
     }
 }
 
@@ -272,12 +280,15 @@ private actor OpenedURLs {
 private actor FakeAgentClient: AgentClient {
     nonisolated let provider: ProviderID = .claude
     private var reads = 0
+    private var checks = 0
     private var error: AgentError?
     private var account = "fixture"
     func readCount() -> Int { reads }
+    func checkCount() -> Int { checks }
     func setError(_ error: AgentError?) { self.error = error }
     func setAccount(_ value: String) { account = value }
     func checkAuthentication() async throws -> AccountIdentity? {
+        checks += 1
         if let error, error.phase != .unavailable { throw error }
         return AccountIdentity(provider: .claude, accountID: account, displayName: "Sample")
     }
