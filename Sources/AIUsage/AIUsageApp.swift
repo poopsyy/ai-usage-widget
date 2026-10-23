@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("signing-in", .signingIn, "Finish sign-in in your browser."),
                     ("paused", .paused, "Paused. Your agent stays signed in."),
                     ("unavailable", .unavailable, AgentError.unavailable(.claude).localizedDescription),
-                    ("unsupported", .unsupported, AgentError.setupRequired(.claude).localizedDescription)
+                    ("unsupported", .unsupported, AgentError.unsupported(.claude).localizedDescription)
                 ] {
                     let sample = MonitorStore(preview: true)
                     if phase == .unavailable {

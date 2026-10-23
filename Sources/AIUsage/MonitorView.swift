@@ -58,6 +58,7 @@ struct MonitorView: View {
         }
         .frame(width: 364)
         .background(.background)
+        .onAppear { store.now = Date() }
     }
 }
 

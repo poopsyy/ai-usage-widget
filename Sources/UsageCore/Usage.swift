@@ -39,19 +39,13 @@ public struct UsageSnapshot: Codable, Equatable, Sendable {
 }
 
 public enum UsageError: LocalizedError {
-    case setup(String), unavailable(String), invalidData, timeout, signedOut
+    case setup(String), unavailable(String), invalidData
     public var errorDescription: String? {
         switch self {
         case .setup(let message), .unavailable(let message): return message
         case .invalidData: return "The provider returned unsupported usage data."
-        case .timeout: return "Codex took too long to respond. Try refreshing."
-        case .signedOut: return "Sign in to Codex with your ChatGPT subscription using codex login."
         }
     }
-}
-
-public protocol UsageProvider: Sendable {
-    func fetch() async throws -> UsageSnapshot
 }
 
 public enum UsageParser {
@@ -125,20 +119,5 @@ public enum UsageFiles {
     }
     public static func read<T: Decodable>(_ type: T.Type, from url: URL) throws -> T {
         try JSONDecoder().decode(type, from: Data(contentsOf: url))
-    }
-}
-
-public struct ClaudeProvider: UsageProvider {
-    public var directory: URL
-    public init(directory: URL = UsageFiles.directory) { self.directory = directory }
-    public func fetch() async throws -> UsageSnapshot {
-        let url = directory.appendingPathComponent("claude.json")
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw UsageError.setup("No legacy Claude Code snapshot is available. Automatic monitoring uses the installed Claude Code executable.")
-        }
-        let snapshot = try UsageFiles.read(UsageSnapshot.self, from: url)
-        guard snapshot.provider == .claude, !snapshot.windows.isEmpty,
-              snapshot.windows.allSatisfy({ $0.usedPercent.isFinite && (0...100).contains($0.usedPercent) }) else { throw UsageError.invalidData }
-        return snapshot
     }
 }

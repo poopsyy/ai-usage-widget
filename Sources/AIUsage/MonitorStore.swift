@@ -31,6 +31,7 @@ final class MonitorStore: ObservableObject {
     private var monitors: [ProviderID: AgentMonitor] = [:]
     private var ledgers: [String: AlertLedger] = [:]
     private var evaluatingAlerts = false
+    private var alertsPending = false
     private let notifications = NotificationDelegate()
     private let directory: URL
 
@@ -55,7 +56,9 @@ final class MonitorStore: ObservableObject {
         UNUserNotificationCenter.current().delegate = notifications
         integrationInstalled = ClaudeIntegration(directory: directory).isInstalled
         for provider in ProviderID.allCases { configure(provider) }
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in Task { @MainActor in await self?.tick() } }
+        // Readings change every few minutes and the UI shows minutes, so a coarse, coalescable timer suffices.
+        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in Task { @MainActor in await self?.tick() } }
+        timer?.tolerance = 10
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in await self?.refresh() } }
         stopObserver = NotificationCenter.default.addObserver(forName: .agentMonitoringWillStop, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.stop() }
@@ -87,6 +90,7 @@ final class MonitorStore: ObservableObject {
             if state.connected, let scope = state.scope, let snapshot = state.snapshot, snapshot != previous {
                 do { try UsageFiles.write(ScopedSnapshot(scope: scope, snapshot: snapshot), to: self.directory.appendingPathComponent("quota-\(provider.rawValue).json")) }
                 catch { self.settingsMessage = "Usage updated. Couldn't save the reading."; self.settingsError = true }
+                Task { await self.evaluateAlerts() }
             }
         }
     }
@@ -109,7 +113,6 @@ final class MonitorStore: ObservableObject {
         async let claude: Void = monitors[.claude]?.refresh() ?? ()
         async let codex: Void = monitors[.codex]?.refresh() ?? ()
         _ = await (claude, codex)
-        await evaluateAlerts()
     }
     func refresh() async {
         guard !preview else { return }
@@ -117,7 +120,7 @@ final class MonitorStore: ObservableObject {
         async let claude: Void = monitors[.claude]?.refresh(force: true) ?? ()
         async let codex: Void = monitors[.codex]?.refresh(force: true) ?? ()
         _ = await (claude, codex)
-        now = Date(); await evaluateAlerts()
+        now = Date()
     }
     func signIn(_ provider: ProviderID) {
         guard !preview else { return }
@@ -188,9 +191,17 @@ final class MonitorStore: ObservableObject {
         let status = await UNUserNotificationCenter.current().notificationSettings()
         notificationStatus = status.authorizationStatus == .denied ? "Allow AI Usage in System Settings → Notifications." : "Alerts at 80% and 95% used."
     }
+    /// Runs when a reading changes. A request during a run is queued, never dropped.
     private func evaluateAlerts() async {
-        guard alertsEnabled, !preview, !evaluatingAlerts else { return }
+        guard alertsEnabled, !preview else { return }
+        guard !evaluatingAlerts else { alertsPending = true; return }
         evaluatingAlerts = true; defer { evaluatingAlerts = false }
+        repeat {
+            alertsPending = false
+            await deliverAlerts()
+        } while alertsPending
+    }
+    private func deliverAlerts() async {
         let center = UNUserNotificationCenter.current()
         let authorization = await center.notificationSettings()
         guard authorization.authorizationStatus == .authorized || authorization.authorizationStatus == .provisional else { return }

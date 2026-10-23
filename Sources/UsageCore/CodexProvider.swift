@@ -1,7 +1,6 @@
 import Foundation
 
 public enum ExecutableLocator {
-    public static func codex(override: String = "") -> URL? { find(.codex, override: override) }
     public static func find(_ provider: ProviderID, override: String = "", environment: [String: String] = ProcessInfo.processInfo.environment, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL? {
         let name = provider == .claude ? "claude" : "codex"
         let paths = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
@@ -14,14 +13,13 @@ public enum ExecutableLocator {
     }
 }
 
-public struct CodexProvider: UsageProvider, AgentClient {
+public struct CodexProvider: AgentClient {
     public let provider: ProviderID = .codex
     public var executableOverride: String
     public var environment: [String: String]
     public init(executableOverride: String = "", environment: [String: String] = ProcessInfo.processInfo.environment) {
         self.executableOverride = executableOverride; self.environment = environment
     }
-    public func fetch() async throws -> UsageSnapshot { try await fetchAccount().snapshot }
     public func checkAuthentication() async throws -> AccountIdentity? {
         try await agentOperation { cancellation in
             let session = try self.session(cancellation: cancellation, timeout: 10)

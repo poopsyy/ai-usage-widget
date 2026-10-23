@@ -12,6 +12,7 @@
 - Agent output written just before the process exits is no longer dropped.
 - Connected refreshes skip the separate sign-in check, and Claude Code's option check runs once per installed version: Codex now starts one agent process per refresh and Claude three instead of five.
 - Claude sign-in checks allow for slow cold starts, Codex sign-out detection no longer matches unrelated errors, and resuming during a rate-limit cooldown explains the wait.
+- The app wakes every 30 seconds instead of every 5 and checks alerts only when a reading changes, reducing idle energy use.
 
 ## 0.1.0 - 2026-10-23
 

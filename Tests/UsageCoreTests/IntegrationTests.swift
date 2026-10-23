@@ -98,17 +98,17 @@ final class IntegrationTests {
     }
     func testCodexRPCHandshakeAndResponse() async throws {
         let executable = try fakeCodex()
-        let snapshot = try await CodexProvider(executableOverride: executable.path).fetch()
+        let snapshot = try await CodexProvider(executableOverride: executable.path).fetchAccount().snapshot
         expectEqual(snapshot.provider, .codex)
         expectEqual(snapshot.windows.first?.remaining, 88)
     }
     func testCodexAuthErrorIsActionable() async throws {
         let executable = try fakeCodex(error: true)
-        do { _ = try await CodexProvider(executableOverride: executable.path).fetch(); fail("Expected auth failure") }
+        do { _ = try await CodexProvider(executableOverride: executable.path).fetchAccount().snapshot; fail("Expected auth failure") }
         catch { expectTrue(error.localizedDescription.contains("codex login")) }
     }
     func testMissingExecutableIsActionable() async {
-        do { _ = try await CodexProvider(executableOverride: "/does/not/exist").fetch(); fail("Expected missing executable") }
+        do { _ = try await CodexProvider(executableOverride: "/does/not/exist").fetchAccount().snapshot; fail("Expected missing executable") }
         catch { expectTrue(error.localizedDescription.contains("Install Codex")) }
     }
 }

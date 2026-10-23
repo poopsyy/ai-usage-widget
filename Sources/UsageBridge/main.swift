@@ -29,7 +29,7 @@ if CommandLine.arguments.contains("--probe-codex") {
     let override = option("--codex-path") ?? ""
     Task {
         do {
-            let snapshot = try await CodexProvider(executableOverride: override).fetch()
+            let snapshot = try await CodexProvider(executableOverride: override).fetchAccount().snapshot
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; encoder.dateEncodingStrategy = .iso8601
             let result = try encoder.encode(snapshot)
             FileHandle.standardOutput.write(result); print("")

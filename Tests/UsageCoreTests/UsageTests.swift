@@ -96,11 +96,11 @@ final class UsageTests {
         let input = data("{\"rate_limits\":{\"five_hour\":{\"used_percentage\":42,\"resets_at\":1800003600}}}")
         try ClaudeCapture.capture(input, directory: directory, at: now)
         try ClaudeCapture.capture(input, directory: directory, at: now.addingTimeInterval(-60))
-        let read = try await ClaudeProvider(directory: directory).fetch()
+        let read = try ClaudeCapture.read(directory: directory)
         expectEqual(read.observedAt, now)
         expectEqual(read.windows.first?.usedPercent, 42)
         expectThrows(try ClaudeCapture.capture(data("{}"), directory: directory))
-        let retained = try await ClaudeProvider(directory: directory).fetch()
+        let retained = try ClaudeCapture.read(directory: directory)
         expectEqual(retained, read)
     }
 }

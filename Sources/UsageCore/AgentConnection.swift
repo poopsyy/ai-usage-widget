@@ -22,13 +22,13 @@ public enum ClaudeProbeIssue: String, Sendable {
 public enum AgentError: Error, LocalizedError, Equatable {
     case notInstalled(ProviderID), signedOut(ProviderID), unsupported(ProviderID)
     case unavailable(ProviderID), timeout(ProviderID), invalidResponse(ProviderID)
-    case setupRequired(ProviderID), browserFailed, identityChanged, rateLimited(Date?)
+    case browserFailed, identityChanged, rateLimited(Date?)
     case claudeProbeSetup(ClaudeProbeIssue)
     public var phase: AgentPhase {
         switch self {
         case .notInstalled: return .notInstalled
         case .signedOut: return .signInRequired
-        case .unsupported, .setupRequired: return .unsupported
+        case .unsupported: return .unsupported
         case .claudeProbeSetup(.capabilities), .claudeProbeSetup(.authenticationFormat): return .unsupported
         default: return .unavailable
         }
@@ -41,7 +41,6 @@ public enum AgentError: Error, LocalizedError, Equatable {
         case .unavailable(let provider): return "Can't reach \(provider.title). Check your connection."
         case .timeout(let provider): return "\(provider.title) timed out. Try refreshing."
         case .invalidResponse(let provider): return "Can't read \(provider.title) usage. Update the agent."
-        case .setupRequired(let provider): return "Open \(provider == .claude ? "Claude Code" : "Codex") to finish setup or update."
         case .browserFailed: return "Can't open sign-in. Sign in through your agent, then refresh."
         case .identityChanged: return "Account changed. Refresh for current usage."
         case .rateLimited: return "Please wait before refreshing."

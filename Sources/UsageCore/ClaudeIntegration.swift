@@ -118,4 +118,11 @@ public enum ClaudeCapture {
         try UsageFiles.write(snapshot, to: url)
         return snapshot
     }
+    /// The latest status-line reading, validated as it is read.
+    public static func read(directory: URL) throws -> UsageSnapshot {
+        let snapshot = try UsageFiles.read(UsageSnapshot.self, from: directory.appendingPathComponent("claude.json"))
+        guard snapshot.provider == .claude, !snapshot.windows.isEmpty,
+              snapshot.windows.allSatisfy({ $0.usedPercent.isFinite && (0...100).contains($0.usedPercent) }) else { throw UsageError.invalidData }
+        return snapshot
+    }
 }
