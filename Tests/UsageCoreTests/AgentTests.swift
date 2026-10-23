@@ -271,10 +271,9 @@ final class AgentTests {
         await login.value
         expectFalse(monitor.state.refreshing); expectEqual(monitor.state.phase, .signInRequired)
         await monitor.refresh(force: true); expectTrue(monitor.state.connected)
-        let switching = Task { await monitor.refresh(force: true) }
-        try await Task.sleep(for: .milliseconds(10))
-        await client.setAccount("switched-during-read")
-        await switching.value
+        // The account changes inside the read itself, so the result never depends on scheduler timing.
+        await client.switchAccountDuringNextRead("switched-during-read")
+        await monitor.refresh(force: true)
         expectEqual(monitor.state.phase, .unavailable); expectNil(monitor.state.snapshot)
     }
     @MainActor
@@ -316,10 +315,12 @@ private actor FakeAgentClient: AgentClient {
     private var checks = 0
     private var error: AgentError?
     private var account = "fixture"
+    private var nextReadAccount: String?
     func readCount() -> Int { reads }
     func checkCount() -> Int { checks }
     func setError(_ error: AgentError?) { self.error = error }
     func setAccount(_ value: String) { account = value }
+    func switchAccountDuringNextRead(_ value: String) { nextReadAccount = value }
     func checkAuthentication() async throws -> AccountIdentity? {
         checks += 1
         if let error, error.phase != .unavailable { throw error }
@@ -329,10 +330,12 @@ private actor FakeAgentClient: AgentClient {
         reads += 1
         // Deliberately ignores task cancellation to exercise the monitor's generation guard.
         try? await Task.sleep(for: .milliseconds(50))
+        if let nextReadAccount { account = nextReadAccount; self.nextReadAccount = nil }
         if let error { throw error }
         return AccountUsage(identity: AccountIdentity(provider: .claude, accountID: account, displayName: "Sample"), snapshot: UsageSnapshot(provider: .claude, observedAt: Date(), windows: [UsageWindow(id: "session", title: "Session", usedPercent: 90, resetsAt: Date().addingTimeInterval(3600))]))
     }
-    func signIn(openBrowser: @escaping AgentBrowserOpener) async throws { try? await Task.sleep(for: .milliseconds(50)) }
+    // Lasts until cancelled, so a test can always cancel it mid-flight regardless of runner speed.
+    func signIn(openBrowser: @escaping AgentBrowserOpener) async throws { try? await Task.sleep(for: .seconds(10)) }
 }
 
 private final class AgentFixture {
