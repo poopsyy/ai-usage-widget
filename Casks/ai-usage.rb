@@ -1,11 +1,8 @@
 cask "ai-usage" do
-  arch arm: "arm64", intel: "x86_64"
+  version "0.2.0"
+  sha256 "dd4bacebad07a4ae1baef0d3219b9e042668045a9a7535adce9414daa9032348"
 
-  version "0.1.0"
-  sha256 arm:   "2b03b4726fdc491afbf32adfca0e63524857ab9267a3a240c861d2a1d61c411e",
-         intel: "03d43df17d23f029cc2356bc5b255297fce38c9524757a6db608aba8c10d84e9"
-
-  url "https://github.com/poopsyy/ai-usage-widget/releases/download/v#{version}/AI-Usage-#{version}-macos-#{arch}.zip"
+  url "https://github.com/poopsyy/ai-usage-widget/releases/download/v#{version}/AI-Usage-#{version}-macos-universal.zip"
   name "AI Usage"
   desc "Menu bar monitor for Claude and Codex subscription allowances"
   homepage "https://github.com/poopsyy/ai-usage-widget"
